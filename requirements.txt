@@ -1,0 +1,14 @@
+# Production Requirements (Lightweight for Cloud Deployment)
+fastapi==0.125.0
+uvicorn[standard]==0.38.0
+pydantic==2.12.5
+python-multipart==0.0.12
+aiofiles==24.1.0
+
+# Remove heavy dependencies for production:
+# - opencv-python (camera not available)
+# - torch/ultralytics (too large for free tier)
+# - numpy/scipy (not needed without AI)
+
+# For local development with full AI features:
+# pip install opencv-python torch ultralytics numpy scipy

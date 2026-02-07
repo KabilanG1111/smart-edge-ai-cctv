@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MJPEG Stream Test</title>
+    <style>
+        body {
+            background: #0a0a0f;
+            color: white;
+            font-family: monospace;
+            padding: 20px;
+        }
+        #stream {
+            border: 2px solid #00d4ff;
+            max-width: 100%;
+            margin: 20px 0;
+        }
+        .info {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        button {
+            background: #00d4ff;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #00ffcc;
+        }
+        #log {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 MJPEG Stream Test</h1>
+    
+    <div class="info">
+        <strong>Testing Direct Backend Connection</strong><br>
+        Backend: <span id="backend-url">http://localhost:8000</span><br>
+        Status: <span id="status">Not connected</span>
+    </div>
+
+    <div>
+        <button onclick="testHealth()">Test Health Check</button>
+        <button onclick="startStream()">Start Stream</button>
+        <button onclick="stopStream()">Stop Stream</button>
+    </div>
+
+    <div>
+        <img id="stream" alt="MJPEG Stream" style="display: none;">
+    </div>
+
+    <div class="info">
+        <strong>Debug Log:</strong>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const streamImg = document.getElementById('stream');
+        const statusSpan = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        function log(message, isError = false) {
+            const time = new Date().toLocaleTimeString();
+            const color = isError ? '#ff0044' : '#00ff88';
+            logDiv.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        async function testHealth() {
+            log('Testing health endpoint...');
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                log(`✓ Backend is alive! ${JSON.stringify(data)}`);
+                statusSpan.textContent = 'Backend running';
+                statusSpan.style.color = '#00ff88';
+            } catch (error) {
+                log(`✗ Health check failed: ${error.message}`, true);
+                statusSpan.textContent = 'Backend offline';
+                statusSpan.style.color = '#ff0044';
+            }
+        }
+
+        async function startStream() {
+            log('Starting camera...');
+            try {
+                // Initialize camera
+                const startResp = await fetch(`${API_BASE}/start`, { method: 'POST' });
+                if (!startResp.ok) {
+                    throw new Error(`Start failed: ${startResp.status}`);
+                }
+                const startData = await startResp.json();
+                log(`✓ Camera initialized: ${JSON.stringify(startData)}`);
+
+                // Wait a moment
+                await new Promise(r => setTimeout(r, 500));
+
+                // Start stream
+                const streamUrl = `${API_BASE}/live?t=${Date.now()}`;
+                log(`Starting MJPEG stream: ${streamUrl}`);
+                
+                streamImg.style.display = 'block';
+                streamImg.src = streamUrl;
+
+                streamImg.onload = () => {
+                    log('✓ Stream connected! First frame loaded.');
+                    statusSpan.textContent = 'Streaming';
+                    statusSpan.style.color = '#00ff88';
+                };
+
+                streamImg.onerror = (e) => {
+                    log(`✗ Stream error: ${e}`, true);
+                    statusSpan.textContent = 'Stream error';
+                    statusSpan.style.color = '#ff0044';
+                };
+
+            } catch (error) {
+                log(`✗ Start failed: ${error.message}`, true);
+            }
+        }
+
+        async function stopStream() {
+            log('Stopping stream...');
+            streamImg.src = '';
+            streamImg.style.display = 'none';
+            
+            try {
+                await fetch(`${API_BASE}/stop`, { method: 'POST' });
+                log('✓ Camera stopped');
+                statusSpan.textContent = 'Stopped';
+                statusSpan.style.color = '#ffaa00';
+            } catch (error) {
+                log(`✗ Stop failed: ${error.message}`, true);
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            log('Page loaded. Click "Test Health Check" to verify backend connection.');
+        });
+    </script>
+</body>
+</html>

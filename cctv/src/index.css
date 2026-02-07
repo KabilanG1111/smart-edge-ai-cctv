@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;600;700;900&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* 🌑 CORE SURFACE */
+  --bg-core: #0b0f14;
+  --bg-panel: #11161d;
+  --bg-element: #1a2029;
+  
+  /* 💠 ACCENTS */
+  --cyan-bright: #00e5ff;
+  --cyan-dim: #00bfd8;
+  --cyan-glow: rgba(0, 229, 255, 0.4);
+  
+  /* 🚨 ALERTS */
+  --red-crit: #ff1744;
+  --red-glow: rgba(255, 23, 68, 0.4);
+  --orange-high: #ff9100;
+  --amber-med: #ffc400;
+  
+  /* 🔠 TYPOGRAPHY */
+  --font-tech: 'Orbitron', sans-serif;
+  --font-ui: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* 📏 BORDERS & FX */
+  --border-cyan: 1px solid rgba(0, 229, 255, 0.3);
+  --border-subtle: 1px solid rgba(255, 255, 255, 0.08);
+  --shadow-glow: 0 0 15px rgba(0, 229, 255, 0.15);
+  
+  /* GRID OVERLAY */
+  --grid-pattern: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 19px,
+      rgba(0, 229, 255, 0.03) 20px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 19px,
+      rgba(0, 229, 255, 0.03) 20px
+    );
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0; padding: 0;
+  background-color: var(--bg-core);
+  color: #e0f2f1;
+  font-family: var(--font-ui);
+  height: 100vh; width: 100vw;
+  overflow: hidden;
+  background-image: var(--grid-pattern);
+}
+
+/* SCROLLBARS */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-core); }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cyan-dim); }
+
+h1, h2, h3 { font-family: var(--font-tech); text-transform: uppercase; letter-spacing: 0.1em; margin: 0; }
+.mono { font-family: var(--font-mono); }
