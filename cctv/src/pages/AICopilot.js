@@ -1,144 +1,232 @@
-import React, { useState, useEffect, useRef } from 'react';
-import './AICopilot.css';
+import React, { useState, useEffect, useRef } from "react";
+import "./AICopilot.css";
+
+/* 
+   MOCK INTELLIGENCE ENGINE
+   Simulates a high-level AI reasoning process rather than a simple chatbot response.
+*/
+const REASONING_TEMPLATES = [
+    {
+        type: 'ANALYSIS',
+        steps: [
+            { label: 'PARSING INTENT', value: 'Semantic vector extraction complete.' },
+            { label: 'DATA CORRELATION', value: 'Cross-referencing 14 active streams against behavior baseline.' },
+            { label: 'PATTERN RECOGNITION', value: 'Deviation detected in sector Logic-7.' }
+        ],
+        conclusion: 'Subject exhibits non-standard dwell time. Recommendation: Increase surveillance priority.'
+    },
+    {
+        type: 'INFERENCE',
+        steps: [
+            { label: 'QUERY SCOPE', value: 'Historical archive // T-Minus 48h.' },
+            { label: 'ENTITY TRACKING', value: 'Subject ID #9921 isolated in 3 frames.' },
+            { label: 'BEHAVIORAL MATCH', value: '94% match with known loitering pattern.' }
+        ],
+        conclusion: 'Confirmed visual contact. Entity movement suggests pre-event reconnaissance.'
+    },
+    {
+        type: 'SYSTEM',
+        steps: [
+            { label: 'SYSTEM CHECK', value: 'Encryption layer integrity: 100%.' },
+            { label: 'NODE STATUS', value: 'All edge nodes active. Latency < 12ms.' }
+        ],
+        conclusion: 'System operational. Ready for high-load inference.'
+    }
+];
 
 const AICopilot = () => {
-    const [input, setInput] = useState('');
+    const [inputValue, setInputValue] = useState("");
     const [history, setHistory] = useState([
-        { type: 'sys', text: 'SYSTEM INITIALIZED. CORE SYSTEMS ONLINE.' },
-        { type: 'sys', text: 'AWAITING COMMAND...' }
+        { 
+            id: 'init-1', 
+            role: 'system', 
+            timestamp: new Date().toISOString(),
+            content: { 
+                type: 'SYSTEM', 
+                steps: [{ label: 'INITIALIZATION', value: 'Cognitive Core Online.' }], 
+                conclusion: 'Awaiting intent injection.' 
+            }
+        }
     ]);
-    const [status, setStatus] = useState('IDLE');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [systemState, setSystemState] = useState('IDLE'); // IDLE, PARSING, CORRELATING, SYNTHESIZING
     const bottomRef = useRef(null);
 
+    // Auto-scroll to bottom of cognitive field
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [history]);
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [history, isProcessing]);
 
-    const handleCommand = (e) => {
-        if (e.key === 'Enter' && input.trim()) {
-            const cmd = input.toUpperCase();
-            setHistory(prev => [...prev, { type: 'user', text: `> ${cmd}` }]);
-            setInput('');
-            processCommand(cmd);
-        }
-    };
+    const handleInjectIntent = () => {
+        if (!inputValue.trim()) return;
 
-    const processCommand = (cmd) => {
-        setStatus('ANALYZING');
-        
-        // Simulating processing delay and response
+        // 1. Inject User Intent
+        const newIntent = {
+            id: Date.now(),
+            role: 'user',
+            timestamp: new Date().toISOString(),
+            content: inputValue
+        };
+
+        setHistory(prev => [...prev, newIntent]);
+        setInputValue("");
+        setIsProcessing(true);
+        setSystemState('PARSING');
+
+        // 2. Simulate AI Reasoning Process
         setTimeout(() => {
-            setStatus('EXECUTING');
+            setSystemState('CORRELATING');
+            
             setTimeout(() => {
-                const responses = generateResponse(cmd);
-                streamResponse(responses);
-            }, 800);
-        }, 600);
+                setSystemState('SYNTHESIZING');
+                
+                // Select Random Template
+                const template = REASONING_TEMPLATES[Math.floor(Math.random() * REASONING_TEMPLATES.length)];
+                
+                const responseNode = {
+                    id: Date.now() + 1,
+                    role: 'ai',
+                    timestamp: new Date().toISOString(),
+                    content: template
+                };
+
+                setTimeout(() => {
+                    setHistory(prev => [...prev, responseNode]);
+                    setIsProcessing(false);
+                    setSystemState('IDLE');
+                }, 800);
+            }, 1200);
+        }, 1000);
     };
 
-    const generateResponse = (cmd) => {
-        if (cmd.includes('STATUS')) return ['DIAGNOSTIC COMPLETE.', 'ALL SYSTEMS NOMINAL.', 'SECURITY LEVEL: ALPHA.'];
-        if (cmd.includes('SCAN')) return ['INITIATING DEEP SCAN...', 'SECTOR 4: CLEAR', 'SECTOR 9: ANOMALY DETECTED', 'SCAN COMPLETE.'];
-        if (cmd.includes('HELP')) return ['AVAILABLE COMMANDS:', '- SYSTEM STATUS', '- INITIATE SCAN', '- DEPLOY DRONE ALPHA', '- ACCESS ARCHIVES'];
-        return ['COMMAND UNRECOGNIZED.', 'PLEASE REFINE PARAMETERS.'];
-    };
-
-    const streamResponse = (lines) => {
-        let i = 0;
-        const interval = setInterval(() => {
-            if (i < lines.length) {
-                setHistory(prev => [...prev, { type: 'sys', text: lines[i] }]);
-                i++;
-            } else {
-                clearInterval(interval);
-                setStatus('IDLE');
-            }
-        }, 500);
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleInjectIntent();
+        }
     };
 
     return (
         <div className="copilot-interface">
-            <div className="scanline-overlay"></div>
-            <div className="noise-overlay"></div>
-            <div className="grid-overlay"></div>
-            
-            <header className="interface-header">
-                <div className="brand-block">
-                    <span className="icon">◈</span>
-                    <span className="title">AI REASONING CORE // TIER-1</span>
+            {/* ZONE C: CONTEXT MEMORY STRIP (SIDE) */}
+            <aside className="context-strip">
+                <div className="ctx-header">ACTIVE CONTEXT</div>
+                <div className="ctx-list">
+                    <ContextNode label="ZONE_ALPHA_01" active={true} />
+                    <ContextNode label="SUBJECT_9921" active={false} />
+                    <ContextNode label="ALERT_LVL_3" active={false} />
+                    <ContextNode label="ARCHIVE_SEARCH" active={false} />
                 </div>
-                <div className="header-deco">
-                    <span className="deco-line">SECURE_CHANNEL_ESTABLISHED</span>
-                    <span className="deco-line">ENCRYPTION: QUANTUM-256</span>
+                
+                <div className="system-metrics">
+                    <div className="metric-row">
+                        <span className="lbl">LOAD</span>
+                        <div className="bar"><div className="fill" style={{width: '34%'}}></div></div>
+                    </div>
+                    <div className="metric-row">
+                        <span className="lbl">MEM</span>
+                        <div className="bar"><div className="fill" style={{width: '62%'}}></div></div>
+                    </div>
                 </div>
-                <div className={`status-block ${status.toLowerCase()}`}>
-                    <span className="label">SYSTEM STATUS:</span>
-                    <span className="value blink">{status}</span>
-                </div>
-            </header>
+            </aside>
 
-            <main className="main-layout">
-                {/* Left Telemetry Sidebar */}
-                <aside className="telemetry-bar left">
-                    <div className="telemetry-group">
-                        <div className="t-label">CPU_LOAD</div>
-                        <div className="t-bar"><div className="fill" style={{width: '45%'}}></div></div>
+            {/* ZONE B: COGNITIVE FIELD (CENTER) */}
+            <main className="cognitive-field">
+                {/* ZONE D: SYSTEM CONSCIOUSNESS (OVERLAY) */}
+                <div className="consciousness-hud">
+                    <div className="state-indicator">
+                        <div className={`status-dot ${systemState}`}></div>
+                        <span className="status-text">{systemState}</span>
                     </div>
-                    <div className="telemetry-group">
-                        <div className="t-label">MEM_ALLOC</div>
-                        <div className="t-bar"><div className="fill" style={{width: '72%'}}></div></div>
-                    </div>
-                    <div className="telemetry-divider"></div>
-                     <div className="telemetry-stat">
-                        <span className="s-label">UPTIME</span>
-                        <span className="s-val">8492:12:44</span>
-                    </div>
-                </aside>
+                    <div className="neural-id">NODE: AEGIS-PRIME // V.9.0.4</div>
+                </div>
 
-                <div className="console-container">
-                    <div className="console-viewport">
-                        {history.map((entry, idx) => (
-                            <div key={idx} className={`console-entry ${entry.type}`}>
-                                {entry.text}
-                            </div>
-                        ))}
-                        <div ref={bottomRef} />
-                    </div>
+                <div className="thought-stream">
+                    {history.map((node) => (
+                        <CognitiveNode key={node.id} data={node} />
+                    ))}
                     
-                     {/* Corner Brackets */}
-                    <div className="corner-bracket top-left"></div>
-                    <div className="corner-bracket top-right"></div>
-                    <div className="corner-bracket bottom-left"></div>
-                    <div className="corner-bracket bottom-right"></div>
+                    {isProcessing && (
+                         <div className="processing-indicator">
+                            <span className="blink">_</span> PROCESSING STREAM
+                         </div>
+                    )}
+                    <div ref={bottomRef}></div>
                 </div>
-
-                {/* Right Telemetry Sidebar */}
-                <aside className="telemetry-bar right">
-                    <div className="module-list">
-                        <div className="module-item active">[VISION_MOD]</div>
-                        <div className="module-item active">[AUDIO_MOD]</div>
-                        <div className="module-item standby">[DRONE_UPLINK]</div>
-                        <div className="module-item offline">[WEAPON_CTRL]</div>
-                    </div>
-                </aside>
             </main>
 
-            <footer className="command-footer">
-                <div className="cmd-prefix">COMMAND_INPUT_TERMINAL_V4</div>
-                <div className="command-bar">
-                    <span className="cursor-prompt">>></span>
+            {/* ZONE A: INTENT ZONE (BOTTOM) */}
+            <div className="intent-zone">
+                <div className="intent-wrapper">
+                    <div className="intent-prefix">>>></div>
                     <input 
                         type="text" 
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleCommand}
-                        placeholder="INITIATE COMMAND SEQUENCE..."
-                        spellCheck="false"
+                        className="intent-input"
+                        placeholder="INJECT INTENT PARAMETERS..."
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        disabled={isProcessing}
                         autoFocus
                     />
-                    <div className="input-deco">_</div>
+                    <button 
+                        className={`inject-btn ${inputValue ? 'active' : ''}`}
+                        onClick={handleInjectIntent}
+                    >
+                        EXECUTE
+                    </button>
                 </div>
-            </footer>
+            </div>
+        </div>
+    );
+};
+
+/* Sub-components */
+const ContextNode = ({ label, active }) => (
+    <div className={`ctx-node ${active ? 'active' : ''}`}>
+        <div className="ctx-dot"></div>
+        <span className="ctx-lbl">{label}</span>
+    </div>
+);
+
+const CognitiveNode = ({ data }) => {
+    const isUser = data.role === 'user';
+    
+    if (isUser) {
+        return (
+            <div className="node-wrapper user-intent">
+                <div className="intent-marker">USER INTENT INJECTION</div>
+                <div className="intent-content">"{data.content}"</div>
+            </div>
+        );
+    }
+
+    // AI Response (Cognitive Block)
+    return (
+        <div className="node-wrapper ai-reasoning">
+            <div className="reasoning-header">
+                <span className="rh-type">{data.content.type} BLOCK</span>
+                <span className="rh-time">{data.timestamp.split('T')[1].substring(0,8)}</span>
+            </div>
+            
+            <div className="reasoning-body">
+                {/* Steps Section */}
+                <div className="reasoning-steps">
+                    {data.content.steps.map((step, i) => (
+                        <div key={i} className="r-step" style={{animationDelay: `${i * 0.15}s`}}>
+                            <span className="step-label">{step.label}</span>
+                            <span className="step-line"></span>
+                            <span className="step-val">{step.value}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Conclusion Section */}
+                <div className="reasoning-conclusion">
+                    <div className="conc-icon"></div>
+                    <div className="conc-text">{data.content.conclusion}</div>
+                </div>
+            </div>
         </div>
     );
 };

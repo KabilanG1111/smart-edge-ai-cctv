@@ -1,57 +1,93 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;600;700;900&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* 🌑 CORE SURFACE */
-  --bg-core: #0b0f14;
-  --bg-panel: #11161d;
-  --bg-element: #1a2029;
+  /*  CORE SURFACE */
+  --bg-core: #050505;
+  --bg-panel: #0a0a0a;
+  --bg-element: #111111;
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /*  ACCENTS */
+  --cyan-bright: #00f0ff;
+  --cyan-dim: #008891;
+  --cyan-dark: rgba(0, 240, 255, 0.1);
+  --cyan-glow: rgba(0, 240, 255, 0.2);
   
-  /* 💠 ACCENTS */
-  --cyan-bright: #00e5ff;
-  --cyan-dim: #00bfd8;
-  --cyan-glow: rgba(0, 229, 255, 0.4);
+  /*  ALERTS */
+  --red-crit: #ff2a2a;
+  --red-dim: #8a0000;
+  --red-glow: rgba(255, 42, 42, 0.25);
   
-  /* 🚨 ALERTS */
-  --red-crit: #ff1744;
-  --red-glow: rgba(255, 23, 68, 0.4);
-  --orange-high: #ff9100;
-  --amber-med: #ffc400;
+  --orange-high: #ff8800;
+  --orange-dim: #995500;
   
-  /* 🔠 TYPOGRAPHY */
+  --amber-med: #ffcc00;
+  --amber-dim: #886600;
+  
+  /*  TYPOGRAPHY */
   --font-tech: 'Orbitron', sans-serif;
   --font-ui: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   
-  /* 📏 BORDERS & FX */
-  --border-cyan: 1px solid rgba(0, 229, 255, 0.3);
-  --border-subtle: 1px solid rgba(255, 255, 255, 0.08);
-  --shadow-glow: 0 0 15px rgba(0, 229, 255, 0.15);
+  /*  BORDERS & FX */
+  --border-cyan: 1px solid rgba(0, 240, 255, 0.15);
+  --border-subtle: 1px solid rgba(255, 255, 255, 0.05);
+  
+  /*  GLOBAL MOTION VARIABLES (ELITE) */
+  --ease-military: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-tech: cubic-bezier(0.16, 1, 0.3, 1);
+  --delay-step: 60ms;
   
   /* GRID OVERLAY */
-  --grid-pattern: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 19px,
-      rgba(0, 229, 255, 0.03) 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 19px,
-      rgba(0, 229, 255, 0.03) 20px
-    );
+  --grid-pattern: 
+    linear-gradient(rgba(20, 30, 40, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 30, 40, 0.5) 1px, transparent 1px);
 }
 
 * { box-sizing: border-box; }
 
+/* FORCE VISIBILITY FOR ENTRANCE ANIMATIONS */
+#root {
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+}
+
 body {
   margin: 0; padding: 0;
   background-color: var(--bg-core);
-  color: #e0f2f1;
+  color: #e0e0e0;
   font-family: var(--font-ui);
   height: 100vh; width: 100vw;
   overflow: hidden;
   background-image: var(--grid-pattern);
+  opacity: 0;
+  animation: systemBoot 1.5s var(--ease-tech) forwards;
+}
+
+/* GLOBAL KEYFRAMES */
+
+/* Page Load: "System Assembling Itself" */
+@keyframes systemBoot {
+    0% { opacity: 0; }
+    30% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes microLift {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slowPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 42, 42, 0); }
+    50% { box-shadow: 0 0 14px 2px rgba(255, 42, 42, 0.15); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 42, 42, 0); }
+}
+
+@keyframes glowShift {
+    0% { border-color: rgba(255,255,255,0.1); }
+    100% { border-color: var(--cyan-bright); box-shadow: 0 0 10px var(--cyan-glow); }
 }
 
 /* SCROLLBARS */
@@ -62,3 +98,76 @@ body {
 
 h1, h2, h3 { font-family: var(--font-tech); text-transform: uppercase; letter-spacing: 0.1em; margin: 0; }
 .mono { font-family: var(--font-mono); }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   � ENHANCED MOTION & PAGE TRANSITIONS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Scroll-Triggered Section Reveal (Applied via IntersectionObserver) */
+.reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s var(--ease-military), transform 0.8s var(--ease-military);
+}
+
+.reveal-on-scroll.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Staggered List Entry (For dynamically populated alerts/cards) */
+@keyframes cascadeEntry {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Card Depth Shift on Hover */
+.ev-card:hover,
+.threat-card:hover {
+    transform: translateY(-4px) translateZ(10px);
+    box-shadow: 0 10px 40px rgba(0, 240, 255, 0.15), 0 0 0 1px rgba(0, 240, 255, 0.2);
+}
+
+/* Button Press: Tactical Feedback */
+button:active {
+    transform: translateY(1px) scale(0.98);
+    opacity: 0.85;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Focus Rings: AI Targeting Style */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 12px rgba(0, 240, 255, 0.2);
+    animation: focusPulse 1.5s infinite;
+}
+
+@keyframes focusPulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 8px rgba(0, 240, 255, 0.2); }
+    50% { box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.6), 0 0 16px rgba(0, 240, 255, 0.3); }
+}
+
+/* Page Transition: Route Change */
+.page-transition-enter {
+    opacity: 0;
+    transform: scale(0.98);
+}
+
+.page-transition-enter-active {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 0.4s var(--ease-military), transform 0.4s var(--ease-military);
+}
+
+.page-transition-exit {
+    opacity: 1;
+}
+
+.page-transition-exit-active {
+    opacity: 0;
+    transform: scale(1.02);
+    transition: opacity 0.3s ease-in, transform 0.3s ease-in;
+}
+

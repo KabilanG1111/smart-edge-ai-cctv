@@ -1,0 +1,134 @@
+/**
+ * 🎯 CURSOR DESIGN RATIONALE
+ * 
+ * Shape: 20px hollow circle + 2px center dot
+ * - Hollow = non-obstructive, can see through target
+ * - Small dot = precise click point indicator
+ * - Cyan accent = matches surveillance UI theme
+ * 
+ * Animation Timing:
+ * - Outer ring: 120ms inertia (JS-driven) = "tracked by system" feel
+ * - Pulse: 2s cycle = calm, continuous monitoring
+ * - Hover expand: 150ms ease-out = snappy feedback without aggression
+ * 
+ * Easing Curves:
+ * - Default: cubic-bezier(0.16, 1, 0.3, 1) = "ease-tech" (military precision)
+ * - Hover: ease-out = natural deceleration
+ * - Pulse: linear = mechanical consistency
+ */
+
+/* Hide default cursor globally */
+body,
+body * {
+    cursor: none !important;
+}
+
+/* Outer Ring: Targeting Reticle */
+.custom-cursor {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgba(0, 240, 255, 0.6);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 99999;
+    transform: translate(-50%, -50%);
+    transition: width 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                height 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.15s ease-out,
+                border-width 0.15s ease-out;
+    animation: cursorPulse 2s linear infinite;
+    mix-blend-mode: screen;
+}
+
+/* Pulse Animation: System Active Indicator */
+@keyframes cursorPulse {
+    0% { 
+        opacity: 0.8; 
+        box-shadow: 0 0 0 rgba(0, 240, 255, 0);
+    }
+    50% { 
+        opacity: 1; 
+        box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+    }
+    100% { 
+        opacity: 0.8; 
+        box-shadow: 0 0 0 rgba(0, 240, 255, 0);
+    }
+}
+
+/* Center Dot: Precision Crosshair */
+.custom-cursor-dot {
+    position: fixed;
+    width: 2px;
+    height: 2px;
+    background: var(--cyan-bright);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 100000;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 4px var(--cyan-bright);
+    mix-blend-mode: screen;
+}
+
+/* HOVER STATE: Target Lock */
+.custom-cursor.cursor-hover {
+    width: 32px;
+    height: 32px;
+    border-color: var(--cyan-bright);
+    border-width: 2px;
+    animation: targetLock 0.3s ease-out forwards, cursorPulse 2s linear infinite;
+}
+
+@keyframes targetLock {
+    0% { 
+        transform: translate(-50%, -50%) scale(0.8) rotate(0deg); 
+    }
+    50% { 
+        transform: translate(-50%, -50%) scale(1.1) rotate(45deg); 
+    }
+    100% { 
+        transform: translate(-50%, -50%) scale(1) rotate(45deg); 
+    }
+}
+
+/* CRITICAL HOVER: Threat Indicator */
+.custom-cursor.cursor-critical {
+    border-color: var(--red-crit);
+    box-shadow: 0 0 12px rgba(255, 42, 42, 0.25);
+    animation: criticalPulse 1s ease-in-out infinite;
+}
+
+@keyframes criticalPulse {
+    0%, 100% { 
+        border-width: 2px;
+        box-shadow: 0 0 8px rgba(255, 42, 42, 0.2);
+    }
+    50% { 
+        border-width: 3px;
+        box-shadow: 0 0 16px rgba(255, 42, 42, 0.4);
+    }
+}
+
+/* VIDEO FEED HOVER: Scanning Mode */
+.custom-cursor.cursor-scanning {
+    width: 40px;
+    height: 40px;
+    border-style: dashed;
+    animation: scanRotate 3s linear infinite;
+}
+
+@keyframes scanRotate {
+    from { 
+        transform: translate(-50%, -50%) rotate(0deg); 
+    }
+    to { 
+        transform: translate(-50%, -50%) rotate(360deg); 
+    }
+}
+
+/* TEXT SELECTION: Show regular cursor for copy operations */
+::selection {
+    background: rgba(0, 240, 255, 0.2);
+    color: #fff;
+}

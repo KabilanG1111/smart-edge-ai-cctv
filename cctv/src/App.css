@@ -1,52 +1,70 @@
 .layout-frame {
     display: flex; height: 100vh; width: 100vw;
+    background: var(--bg-core);
+    position: relative;
+    overflow: hidden;
+}
+
+/* SUBTLE GRID BACKGROUND */
+.layout-frame::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-size: 50px 50px;
+    background-image: var(--grid-pattern);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
 }
 
 .main-stage {
     flex: 1;
     display: flex; flex-direction: column;
     position: relative;
-    background: radial-gradient(circle at center, #131820 0%, #0b0f14 100%);
-    padding: 20px;
+    z-index: 10;
+    padding: 0; /* Remove padding for full-bleed feel */
+    overflow: hidden;
 }
 
 .stage-content {
     flex: 1;
     position: relative;
     overflow: hidden;
-    border: var(--border-cyan);
-    border-radius: 8px;
-    background: rgba(10, 15, 20, 0.7);
-    box-shadow: var(--shadow-glow), inset 0 0 50px rgba(0,0,0,0.5);
+    background: transparent;
+    display: flex;
+    flex-direction: column;
 }
 
+/* REMOVE OLD SCANLINE FOR CLEANER LOOK */
 .stage-content::before {
-    content: " ";
-    position: absolute; top:0; left:0; width: 100%; height: 2px;
-    background: var(--cyan-bright);
-    opacity: 0.1;
-    animation: scanline 4s linear infinite;
-    pointer-events: none;
-    z-index: 99;
-}
-
-@keyframes scanline {
-    0% { transform: translateY(-10px); opacity: 0; }
-    10% { opacity: 0.2; }
-    90% { opacity: 0.2; }
-    100% { transform: translateY(100vh); opacity: 0; }
+    display: none;
 }
 
 .security-badge {
     position: absolute;
-    bottom: 30px; right: 40px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 16px;
-    background: rgba(0, 20, 30, 0.8);
-    border: 1px solid rgba(0, 229, 255, 0.2);
-    border-radius: 4px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.5);
-    z-index: 100;
+    bottom: 20px; right: 20px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 2px solid var(--cyan-dim);
+    border-radius: 0; /* Square aesthetic */
+    backdrop-filter: blur(4px);
+    z-index: 900;
+    pointer-events: none;
+}
+
+.badge-text .b-main {
+    font-family: var(--font-tech);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--cyan-bright);
+}
+
+.badge-text .b-sub {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: #666;
+    margin-top: 2px;
 }
 
 .badge-icon { color: var(--cyan-bright); font-size: 14px; }
