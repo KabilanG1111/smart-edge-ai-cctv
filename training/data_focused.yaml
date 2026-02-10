@@ -1,0 +1,14 @@
+# Focused YOLO dataset for specific objects
+# Train to detect even in poor clarity/lighting
+path: data_focused
+train: images/train
+val: images/val
+
+# Target classes (order matters - match your labels)
+names:
+  - fan
+  - scissors
+  - aeroplane
+  - surfboard
+  - tv
+  - refrigerator

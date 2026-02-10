@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Stream Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        #videoFeed {
+            width: 100%;
+            max-width: 800px;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+    </style>
+</head>
+<body>
+    <h1>🎥 Camera Stream Test</h1>
+    
+    <div class="container">
+        <h2>Controls</h2>
+        <button onclick="startCamera()">Start Camera</button>
+        <button onclick="stopCamera()">Stop Camera</button>
+        <button onclick="checkStatus()">Check Status</button>
+    </div>
+
+    <div class="container">
+        <h2>Status</h2>
+        <div id="status" class="status">Click "Check Status" to see camera state</div>
+    </div>
+
+    <div class="container">
+        <h2>Live Feed</h2>
+        <img id="videoFeed" src="" alt="Camera feed will appear here">
+        <p class="info">Note: The feed URL is http://localhost:8000/api/live</p>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        const statusDiv = document.getElementById('status');
+        const videoFeed = document.getElementById('videoFeed');
+
+        async function startCamera() {
+            try {
+                statusDiv.innerHTML = '<span class="info">Starting camera...</span>';
+                const response = await fetch(`${API_BASE}/start`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'ready') {
+                    statusDiv.innerHTML = `<span class="success">✅ ${data.message}</span>`;
+                    // Start streaming
+                    videoFeed.src = `${API_BASE}/live?t=${Date.now()}`;
+                } else {
+                    statusDiv.innerHTML = `<span class="error">❌ ${data.message}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function stopCamera() {
+            try {
+                statusDiv.innerHTML = '<span class="info">Stopping camera...</span>';
+                const response = await fetch(`${API_BASE}/stop`, { method: 'POST' });
+                const data = await response.json();
+                
+                videoFeed.src = '';
+                statusDiv.innerHTML = `<span class="success">✅ ${data.message}</span>`;
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                
+                let html = '<div>';
+                html += `<strong>Streaming:</strong> ${data.streaming ? '✅ Yes' : '❌ No'}<br>`;
+                html += `<strong>Camera Active:</strong> ${data.camera_active ? '✅ Yes' : '❌ No'}<br>`;
+                html += `<strong>Camera State:</strong> ${data.camera_state}<br>`;
+                html += `<strong>Frame Count:</strong> ${data.frame_count}<br>`;
+                html += `<strong>Pipeline Active:</strong> ${data.pipeline_active ? '✅ Yes' : '❌ No'}<br>`;
+                html += '</div>';
+                
+                statusDiv.innerHTML = html;
+                
+                // If streaming, ensure video feed is showing
+                if (data.streaming && !videoFeed.src) {
+                    videoFeed.src = `${API_BASE}/live?t=${Date.now()}`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Auto-check status on load
+        window.addEventListener('load', checkStatus);
+        
+        // Auto-refresh status every 3 seconds
+        setInterval(checkStatus, 3000);
+    </script>
+</body>
+</html>

@@ -69,8 +69,8 @@ class ObjectTracker:
     
     def __init__(
         self,
-        model_path: str = "yolov8n.pt",
-        conf_threshold: float = 0.25,
+        model_path: str = "yolov8s.pt",  # Change to "runs/train_robust/focused_detector/weights/best.pt" after training
+        conf_threshold: float = 0.30,  # Lowered for poor clarity detection
         iou_threshold: float = 0.7,
         max_age: int = 30,  # frames to keep lost tracks
         stationary_threshold: int = 10  # pixels for stationary detection
@@ -132,19 +132,32 @@ class ObjectTracker:
         self.frame_count += 1
         
         # Run YOLOv8 tracking (includes detection + ByteTrack)
-        results = self.model.track(
-            source=frame,
-            conf=self.conf_threshold,
-            iou=self.iou_threshold,
-            persist=True,  # Enable persistent tracking
-            tracker="bytetrack.yaml",  # Use ByteTrack
-            verbose=False,
-            stream=False
-        )
+        try:
+            results = self.model.track(
+                source=frame,
+                conf=self.conf_threshold,
+                iou=self.iou_threshold,
+                imgsz=640,  # Higher resolution input for small objects
+                persist=True,  # Enable persistent tracking
+                tracker="bytetrack.yaml",  # Use ByteTrack
+                verbose=False,
+                stream=False
+            )
+        except Exception as e:
+            # Fallback: plain detection without tracking if ByteTrack fails
+            logger.warning(f"⚠️ ByteTrack failed ({e}), falling back to detection only")
+            results = self.model.predict(
+                source=frame,
+                conf=self.conf_threshold,
+                iou=self.iou_threshold,
+                imgsz=640,
+                verbose=False
+            )
         
         # Extract tracking results
         tracked_objects = []
         current_track_ids = set()
+        next_temp_id = 10000 + self.frame_count  # temp IDs for untracked detections
         
         if results and len(results) > 0:
             result = results[0]
@@ -153,10 +166,12 @@ class ObjectTracker:
                 boxes = result.boxes
                 
                 for box in boxes:
-                    # Extract data
-                    track_id = int(box.id[0]) if box.id is not None else None
-                    if track_id is None:
-                        continue  # Skip untracked detections
+                    # Extract data — assign temp ID if ByteTrack didn't track it
+                    if box.id is not None:
+                        track_id = int(box.id[0])
+                    else:
+                        track_id = next_temp_id
+                        next_temp_id += 1
                     
                     current_track_ids.add(track_id)
                     
@@ -280,48 +295,7 @@ class ObjectTracker:
         frame: np.ndarray, 
         tracked_objects: List[TrackedObject]
     ) -> np.ndarray:
-        """Draw bounding boxes, labels, and tracking info"""
-        for track in tracked_objects:
-            x1, y1, x2, y2 = track.bbox
-            color = self.track_colors.get(track.track_id, (0, 255, 0))
-            
-            # Draw bounding box (thicker if loitering)
-            thickness = 3 if track.is_loitering else 2
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-            
-            # Draw track trail
-            if track.track_id in self.track_history:
-                points = list(self.track_history[track.track_id])
-                for i in range(1, len(points)):
-                    cv2.line(frame, points[i-1], points[i], color, 2)
-            
-            # Label with ID, class, confidence, duration
-            label = f"ID:{track.track_id} {track.class_name}"
-            sublabel = f"{track.confidence:.2f} | {track.duration:.1f}s"
-            
-            if track.is_loitering:
-                sublabel += " | LOITERING"
-            
-            # Background for text
-            (w1, h1), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-            (w2, h2), _ = cv2.getTextSize(sublabel, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
-            max_w = max(w1, w2)
-            
-            cv2.rectangle(frame, (x1, y1 - h1 - h2 - 10), (x1 + max_w + 10, y1), color, -1)
-            cv2.putText(frame, label, (x1 + 5, y1 - h2 - 5), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            cv2.putText(frame, sublabel, (x1 + 5, y1 - 5), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            
-            # Draw center point
-            cx, cy = track.center
-            cv2.circle(frame, (cx, cy), 4, color, -1)
-        
-        # Draw global stats
-        stats_text = f"Tracks: {len(tracked_objects)} | Total: {self.total_tracks} | FPS: {np.mean(self.fps_history):.1f}"
-        cv2.putText(frame, stats_text, (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        
+        """Clean frame - no debug overlays, just the raw feed"""
         return frame
     
     def _generate_color(self, track_id: int) -> Tuple[int, int, int]:
@@ -361,6 +335,3 @@ class ObjectTracker:
 
 # Global singleton instance (initialized with default parameters)
 tracker = ObjectTracker()
-
-# Configure after creation if needed
-tracker.model_path = "cctv/yolov8n.pt"

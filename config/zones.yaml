@@ -1,0 +1,61 @@
+# Zone Definitions for Context-Aware Surveillance
+# Define spatial zones for behavioral analysis
+
+zones:
+  # Entrance/Exit monitoring
+  entrance:
+    coordinates: [0, 0, 320, 240]  # [x1, y1, x2, y2]
+    description: "Main entrance area"
+    sensitivity: "medium"
+    
+  # Restricted areas (high security)
+  restricted:
+    coordinates: [480, 0, 640, 240]
+    description: "Restricted access zone"
+    sensitivity: "high"
+    alert_on_entry: true
+    
+  # Main operational area
+  main_area:
+    coordinates: [0, 240, 640, 480]
+    description: "Main operational area"
+    sensitivity: "low"
+    
+  # Loading dock/storage
+  storage:
+    coordinates: [0, 360, 240, 480]
+    description: "Storage and loading area"
+    sensitivity: "medium"
+    loitering_timeout: 180  # seconds
+
+# Global settings
+settings:
+  # Loitering detection
+  loitering_timeout_default: 120  # seconds
+  stationary_threshold: 5.0  # pixels/second
+  
+  # Alert thresholds
+  warning_threshold: 0.3  # intent score 0-1
+  suspicious_threshold: 0.7
+  
+  # Cooldowns
+  alert_cooldown: 120  # seconds between alerts for same track
+  
+  # Time-based rules
+  off_hours:
+    start: "22:00"
+    end: "06:00"
+    sensitivity_multiplier: 1.5  # Increase intent scores during off-hours
+
+# Dynamic agent classes (YOLOv8 classes to track)
+dynamic_classes:
+  - person
+  - backpack
+  - handbag
+  - suitcase
+  - bottle
+  - cell phone
+  - scissors
+  # Add custom weapon classes if trained
+  # - knife
+  # - gun

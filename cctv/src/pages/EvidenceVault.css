@@ -83,37 +83,154 @@
     box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
 }
 
-/* --- HORIZONTAL STRIP --- */
-.evidence-strip {
+/* ========================================
+   3. TRI-CARD SPATIAL LAYOUT
+======================================== */
+.spatial-vault-container {
     flex: 1;
-    overflow-x: auto;
-    overflow-y: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 80px 40px;
+}
+
+.card-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
-    padding: 0 40px;
-    gap: 30px;
-    scroll-snap-type: x mandatory;
-    margin-top: -20px; /* pull cards up slightly visually for layout balance */
+    justify-content: center;
 }
 
-/* Hide scrollbar */
-.evidence-strip::-webkit-scrollbar { height: 0; width: 0; }
-
-/* --- CARD --- */
-.ev-card {
-    min-width: var(--card-width);
+/* Individual Spatial Card */
+.ev-card.spatial {
+    position: absolute;
     width: var(--card-width);
-    height: 540px; 
+    height: 540px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    scroll-snap-align: center;
-    display: flex; flex-direction: column;
-    position: relative;
-    transition: transform 0.2s;
-    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    will-change: transform, opacity;
+    transition: box-shadow 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    pointer-events: none;
+    box-shadow: 
+        0 8px 40px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
-.ev-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); }
+/* Center Card - Hero Focus */
+.ev-card.spatial.center {
+    cursor: grab;
+    pointer-events: auto;
+    border-color: rgba(0, 229, 255, 0.25);
+    box-shadow: 
+        0 16px 64px rgba(0, 0, 0, 0.7),
+        0 8px 32px rgba(0, 255, 255, 0.1),
+        inset 0 1px 2px rgba(0, 255, 255, 0.06);
+}
+
+.ev-card.spatial.center:active {
+    cursor: grabbing;
+}
+
+/* Side Cards - Supporting Context */
+.ev-card.spatial.side {
+    pointer-events: none;
+    border-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 1px rgba(255, 255, 255, 0.02);
+}
+
+.ev-card.spatial.side .card-body {
+    opacity: 0.75;
+}
+
+.ev-card.spatial.side .event-title {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.ev-card.spatial.side .severity-badge {
+    opacity: 0.6;
+}
+
+/* MINIMAL VAULT NAVIGATION */
+.vault-nav {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    background: rgba(11, 14, 20, 0.75);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 255, 255, 0.08);
+    border-radius: 60px;
+    padding: 10px 28px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.nav-arrow {
+    background: transparent;
+    border: none;
+    color: rgba(0, 255, 255, 0.5);
+    font-size: 32px;
+    font-weight: 300;
+    cursor: pointer;
+    padding: 0 8px;
+    transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+    line-height: 1;
+}
+
+.nav-arrow:hover {
+    color: rgba(0, 255, 255, 1);
+    transform: scale(1.12);
+}
+
+.nav-arrow:active {
+    transform: scale(0.92);
+}
+
+.position-indicator {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-family: 'Courier New', monospace;
+    color: rgba(0, 255, 255, 0.9);
+    user-select: none;
+}
+
+.position-indicator .current {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.position-indicator .divider {
+    font-size: 16px;
+    opacity: 0.3;
+}
+
+.position-indicator .total {
+    font-size: 16px;
+    opacity: 0.5;
+    font-weight: 400;
+}
+
+/* ========================================
+   4. EVIDENCE CARD CONTENT
+======================================== */
+
+/* --- HORIZONTAL STRIP (LEGACY - REMOVED) --- */
+.evidence-strip {
+    display: none;
+}
 
 /* THUMBNAIL */
 .media-area {

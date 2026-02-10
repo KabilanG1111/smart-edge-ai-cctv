@@ -53,7 +53,7 @@ while True:
 
     for (x, y, w, h) in boxes:
         motion_detected = True
-        cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # No bounding box rendering — silent detection
 
         if inside_roi(x, y, w, h):
             roi_triggered = True
@@ -103,54 +103,8 @@ while True:
         motion_sound_played = False
         alert_sound_played = False
 
-    # ================= TIMER =================
-
-    cv2.putText(
-        display,
-        get_time_string(),
-        (10, display.shape[0] - 10),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (255, 255, 255),
-        2
-    )
-
-    # ================= STATUS =================
-
-    display = draw_status_text(display, status)
-    if status == "ALERT":
-        display = draw_alert_text(display)
-
-    # ================= TOP BANNER =================
-
-    if banner_text and banner_start_time:
-        elapsed = current_time - banner_start_time
-
-        if elapsed <= BANNER_DURATION:
-            slide_time = min(elapsed, 0.4)
-            y = int((slide_time / 0.4) * BANNER_HEIGHT)
-
-            cv2.rectangle(display, (0, 0), (display.shape[1], y), banner_color, -1)
-
-            (text_w, _), _ = cv2.getTextSize(
-                banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2
-            )
-
-            text_x = (display.shape[1] - text_w) // 2
-            text_y = int(y * 0.7)
-
-            cv2.putText(
-                display,
-                banner_text,
-                (text_x, text_y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                (0, 0, 0),
-                2
-            )
-        else:
-            banner_text = None
-            banner_start_time = None
+    # All visual overlays removed — clean raw feed
+    # Timer, status text, alert text, and banners run silently
 
     cv2.imshow(WINDOW_NAME, display)
 

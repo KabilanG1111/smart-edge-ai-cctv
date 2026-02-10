@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navigation from "./components/Navigation";
 import CustomCursor from "./components/CustomCursor";
@@ -9,18 +9,26 @@ import AlertCenter from "./pages/AlertCenter";
 import AICopilot from "./pages/AICopilot";
 import "./App.css";
 
-function App() {
-  const [animationComplete, setAnimationComplete] = useState(() => {
-    return sessionStorage.getItem("entrance-complete") === "true";
-  });
+let runtimeBootFlag = false;
 
-  const handleEntranceComplete = () => {
-    sessionStorage.setItem("entrance-complete", "true");
-    setAnimationComplete(true);
+function App() {
+  const [isBooting, setIsBooting] = useState(!runtimeBootFlag);
+  const mountedRef = useRef(false);
+
+  React.useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+    }
+  }, []);
+
+  const handleBootComplete = () => {
+    runtimeBootFlag = true;
+    sessionStorage.setItem("boot-sequence-complete", "true");
+    setIsBooting(false);
   };
 
-  if (!animationComplete) {
-    return <EntranceAnimation onComplete={handleEntranceComplete} />;
+  if (isBooting) {
+    return <EntranceAnimation onComplete={handleBootComplete} />;
   }
 
   return (

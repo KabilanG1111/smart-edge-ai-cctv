@@ -1,0 +1,181 @@
+/* ─── DETECTION FEED SIDEBAR ─── */
+/* Instagram / YouTube Live Chat style messages */
+
+.detection-feed {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.45);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+/* ─ Header ─ */
+.feed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.feed-title {
+  font-family: var(--font-tech, "Courier New", monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #888;
+}
+
+.feed-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff1744;
+  box-shadow: 0 0 6px #ff1744;
+  animation: dot-blink 1.5s infinite;
+}
+
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.feed-count {
+  font-family: var(--font-tech, monospace);
+  font-size: 10px;
+  color: #555;
+  margin-left: auto;
+}
+
+/* ─ Scrollable message area ─ */
+.feed-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar but keep scrollable */
+.feed-scroll::-webkit-scrollbar { width: 3px; }
+.feed-scroll::-webkit-scrollbar-track { background: transparent; }
+.feed-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+
+/* ─ Empty state ─ */
+.feed-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0.4;
+}
+
+.empty-icon { font-size: 28px; }
+
+.empty-text {
+  font-size: 11px;
+  color: #666;
+  font-family: var(--font-tech, monospace);
+  letter-spacing: 0.5px;
+}
+
+/* ─ Individual message bubble ─ */
+.feed-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 2px solid var(--accent, #888);
+  opacity: 1;
+  transform: translateX(0);
+  animation: msg-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 1.5s ease, transform 0.5s ease;
+}
+
+.feed-msg:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ─ Slide-in animation ─ */
+@keyframes msg-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(60px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* ─ NEW badge pulse ─ */
+.feed-msg.is-new {
+  background: rgba(0, 229, 255, 0.08);
+  animation: msg-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+             new-pulse 0.8s ease-out;
+}
+
+@keyframes new-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.3); }
+  70% { box-shadow: 0 0 0 8px rgba(0, 229, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); }
+}
+
+/* ─ Fading out (before removal) ─ */
+.feed-msg.fading {
+  opacity: 0.25;
+}
+
+/* ─ Icon ─ */
+.msg-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+
+/* ─ Body (label + confidence) ─ */
+.msg-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.msg-label {
+  font-family: var(--font-tech, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg-conf {
+  font-size: 10px;
+  color: #666;
+  font-family: var(--font-tech, monospace);
+  flex-shrink: 0;
+}
+
+/* ─ Track ID badge ─ */
+.msg-track {
+  font-size: 9px;
+  color: #444;
+  font-family: var(--font-tech, monospace);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 5px;
+  border-radius: 3px;
+}

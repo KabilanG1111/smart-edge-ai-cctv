@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import DetectionFeed from "../components/DetectionFeed";
 import "./LiveStream.css";
 
-const API = process.env.REACT_APP_API_URL || "/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
 
 const LiveStream = () => {
     const [live, setLive] = useState(false);
     const [stats, setStats] = useState({ fps: 0, objects: 0, latency: 45, confidence: 98 });
     const [status, setStatus] = useState("DISCONNECTED");
+    const [streamUrl, setStreamUrl] = useState(null);
+    const imgRef = useRef(null);
+    const retryTimerRef = useRef(null);
 
+    // Stats polling — only when live, uses try/catch so it never breaks anything
     useEffect(() => {
         if (!live) {
             setStatus("DISCONNECTED");
@@ -20,22 +25,53 @@ const LiveStream = () => {
                 const res = await fetch(`${API}/status`);
                 const data = await res.json();
                 const t = data.pipeline_stats?.tracker || {};
-                setStats({
-                    fps: Math.round(t.avg_fps || 30),
-                    objects: t.active_tracks || 0,
+                setStats(s => ({
+                    ...s,
+                    fps: Math.round(t.avg_fps || s.fps),
+                    objects: t.active_tracks ?? s.objects,
                     latency: 35 + Math.floor(Math.random() * 12),
                     confidence: 85 + Math.floor(Math.random() * 14)
-                });
-            } catch(e) {}
-        }, 1000);
+                }));
+            } catch(e) { /* silently ignore — stats are non-critical */ }
+        }, 3000);
         return () => clearInterval(interval);
     }, [live]);
 
-    const handleStream = async (start) => {
-        setLive(start);
-        if(start) await fetch(`${API}/start`, {method:'POST'});
-        else await fetch(`${API}/stop`, {method:'POST'});
-    };
+    // Cleanup retry timer on unmount
+    useEffect(() => {
+        return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
+    }, []);
+
+    const handleStream = useCallback(async (start) => {
+        if(start) {
+            // Try to start backend — but even if it fails, still show the stream
+            // The /live endpoint auto-starts the camera anyway
+            try {
+                await fetch(`${API}/start`, { method: 'POST' });
+            } catch (e) {
+                console.warn('Backend /start call failed, /live will auto-start camera');
+            }
+            // Set stable stream URL BEFORE going live
+            setStreamUrl(`${API}/live?t=${Date.now()}`);
+            setLive(true);
+        } else {
+            setLive(false);
+            setStreamUrl(null);
+            try { await fetch(`${API}/stop`, { method: 'POST' }); } catch(e) {}
+        }
+    }, []);
+
+    // Auto-retry stream on error — never give up
+    const handleStreamError = useCallback((e) => {
+        if (!live) return;
+        console.warn('Stream interrupted, reconnecting...');
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = setTimeout(() => {
+            if (imgRef.current && live) {
+                imgRef.current.src = `${API}/live?t=${Date.now()}`;
+            }
+        }, 2000);
+    }, [live]);
 
     return (
         <div className="ops-view">
@@ -53,13 +89,13 @@ const LiveStream = () => {
 
                 <div className="viewport">
                     {live ? (
-                        <>
-                            <img src={`${API}/live?t=${Date.now()}`} className="stream-img" alt="feed"/>
-                            <div className="hud-layer">
-                                <div className="target-box"></div>
-                                <div className="timestamp mono">{new Date().toLocaleTimeString()}</div>
-                            </div>
-                        </>
+                        <img 
+                            ref={imgRef}
+                            src={streamUrl} 
+                            className="stream-img" 
+                            alt="feed"
+                            onError={handleStreamError}
+                        />
                     ) : (
                         <div className="no-signal">
                             <div className="warn-icon">⚠️</div>
@@ -78,6 +114,9 @@ const LiveStream = () => {
                     </div>
                 )}
             </div>
+
+            {/* DETECTION FEED — Instagram/YouTube-style live messages */}
+            <DetectionFeed active={live} />
 
             {/* TELEMETRY SIDEBAR */}
             <div className="telemetry-col">

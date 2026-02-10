@@ -47,13 +47,16 @@ class AIProcessingPipeline:
     
     def process_frame(self, frame):
         """
-        Main processing pipeline: capture → detect → classify → overlay → return
+        Main processing pipeline: capture → detect → classify → return clean frame
+        
+        All detection/analysis runs silently in the background.
+        The output is always the raw, unmodified camera frame.
         
         Args:
             frame: Raw BGR frame from camera
             
         Returns:
-            processed_frame: Frame with AI overlays, bounding boxes, and labels
+            processed_frame: Clean raw frame (no overlays)
         """
         current_time = time.time()
         display = frame.copy()
@@ -61,7 +64,7 @@ class AIProcessingPipeline:
         # Step 1: Motion Detection
         boxes, thresh = self.detector.detect(frame)
         
-        # Step 2: ROI Analysis & Data Collection
+        # Step 2: ROI Analysis & Data Collection (silent — no drawing)
         motion_detected = False
         roi_triggered = False
         motion_count = 0
@@ -83,68 +86,9 @@ class AIProcessingPipeline:
             if in_roi:
                 roi_triggered = True
             
-            # Draw thin neon bounding box (cyan for normal, red for ROI)
-            if in_roi:
-                box_color = (68, 0, 255)  # Red (BGR)
-                glow_color = (100, 50, 255)
-            else:
-                box_color = (255, 255, 0)  # Cyan (BGR)
-                glow_color = (200, 255, 100)
-            
-            # Thin outline with subtle glow effect
-            cv2.rectangle(display, (x, y), (x + w, y + h), glow_color, 2, cv2.LINE_AA)
-            cv2.rectangle(display, (x, y), (x + w, y + h), box_color, 1, cv2.LINE_AA)
-            
-            # Minimal label - small, semi-transparent
-            if in_roi:
-                label = f"ROI-{motion_count}"
-                label_color = (68, 0, 255)
-            else:
-                label = f"M{motion_count}"
-                label_color = (255, 255, 0)
-            
-            # Calculate label position (above box)
-            label_y = y - 8 if y > 25 else y + h + 18
-            
-            # Draw label with background
-            text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)[0]
-            label_bg_start = (x, label_y - text_size[1] - 4)
-            label_bg_end = (x + text_size[0] + 8, label_y + 2)
-            
-            # Semi-transparent background
-            overlay = display.copy()
-            cv2.rectangle(overlay, label_bg_start, label_bg_end, (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.7, display, 0.3, 0, display)
-            
-            # Label text
-            cv2.putText(
-                display,
-                label,
-                (x + 4, label_y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                label_color,
-                1,
-                cv2.LINE_AA
-            )
-            
-            # Confidence indicator (minimal, bottom-right corner)
-            area = w * h
-            confidence = min(100, int((area / MIN_CONTOUR_AREA) * 100))
-            conf_text = f"{confidence}%"
-            conf_size = cv2.getTextSize(conf_text, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)[0]
-            cv2.putText(
-                display,
-                conf_text,
-                (x + w - conf_size[0] - 4, y + h - 4),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                (200, 200, 200),
-                1,
-                cv2.LINE_AA
-            )
+            # All visual rendering removed — analysis is silent
         
-        # Step 3: Behavioral Analysis (Legacy)
+        # Step 3: Behavioral Analysis (silent background processing)
         motion_data = {
             'motion_detected': motion_detected,
             'num_motions': motion_count,
@@ -163,9 +107,7 @@ class AIProcessingPipeline:
         # Step 4: State Machine (Context Classification)
         self._update_state(motion_detected, roi_triggered, current_time, anomaly_result)
         
-        # Step 5: Visual Overlays (with anomaly indicators)
-        display = self._render_overlays(display, current_time, motion_count, anomaly_result)
-        
+        # No visual overlays — return clean raw frame
         return display
     
     def _update_state(self, motion_detected, roi_triggered, current_time, anomaly_result):

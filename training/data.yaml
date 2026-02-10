@@ -1,0 +1,13 @@
+# YOLOv8 dataset config
+# Update `path` if your dataset is elsewhere.
+path: data
+train: images/train
+val: images/val
+
+# Class names in order (index = class_id)
+names:
+  - person
+  - car
+  - bike
+  - truck
+  - bus

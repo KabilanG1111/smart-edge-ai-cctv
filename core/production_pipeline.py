@@ -52,6 +52,11 @@ class ProductionPipeline:
         self.alert_queue: List[Dict] = []
         self.max_alert_history = 100
         
+        # Detection feed for live sidebar (like YouTube/Instagram live chat)
+        self.detection_feed: deque = deque(maxlen=200)
+        self._last_announced: Dict[int, float] = {}  # track_id -> last_announce_time
+        self._announce_cooldown = 3.0  # seconds before re-announcing same track
+        
         # Performance metrics
         self.metrics = {
             "total_frames": 0,
@@ -84,6 +89,27 @@ class ProductionPipeline:
         # STEP 2: Object Detection + Tracking (YOLOv8 + ByteTrack)
         annotated_frame, tracked_objects = self.tracker.track(frame)
         self.metrics["total_detections"] += len(tracked_objects)
+        
+        # --- Feed detection messages (throttled per track) ---
+        now = time.time()
+        for obj in tracked_objects:
+            tid = obj.track_id
+            last_t = self._last_announced.get(tid, 0)
+            if now - last_t >= self._announce_cooldown:
+                self._last_announced[tid] = now
+                self.detection_feed.append({
+                    "id": f"{self.frame_count}-{tid}",
+                    "class": obj.class_name,
+                    "confidence": round(obj.confidence * 100),
+                    "track_id": tid,
+                    "timestamp": now,
+                    "duration": round(obj.duration, 1),
+                    "is_new": obj.frame_count <= 3,
+                })
+        # Prune stale announce entries
+        stale = [k for k, v in self._last_announced.items() if now - v > 30]
+        for k in stale:
+            del self._last_announced[k]
         
         # STEP 3: Event Detection
         events = self.event_detector.detect_events(tracked_objects, frame.shape)
@@ -165,10 +191,8 @@ class ProductionPipeline:
             "metrics": self.metrics
         }
         
-        # Add overlay with pipeline stats
-        annotated_frame = self._draw_pipeline_stats(annotated_frame, pipeline_data)
-        
-        return annotated_frame, pipeline_data
+        # Clean feed — return raw frame, no annotations
+        return frame.copy(), pipeline_data
     
     def _draw_pipeline_stats(self, frame: np.ndarray, data: Dict) -> np.ndarray:
         """Draw production pipeline statistics on frame"""
@@ -207,6 +231,11 @@ class ProductionPipeline:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         
         return frame
+    
+    def get_recent_detections(self, since: float = 0, limit: int = 60) -> List[Dict]:
+        """Get detection feed entries newer than `since` timestamp"""
+        results = [d for d in self.detection_feed if d["timestamp"] > since]
+        return results[-limit:]
     
     def get_recent_alerts(self, limit: int = 50) -> List[Dict]:
         """Get recent alerts for frontend"""

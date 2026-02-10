@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-# NEW: Production pipeline (replaces old ai_pipeline)
-from core.production_pipeline import production_pipeline
+# STABLE PIPELINE: OpenVINO + ByteTrack + Context Reasoning (filters static objects!)
+from core.stable_production_pipeline import stable_pipeline
 from core.camera_lifecycle_manager import camera_manager
 
 # Lifespan context manager for startup/shutdown
@@ -42,17 +42,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS middleware MUST be added immediately after app creation and BEFORE routes
+# CORS middleware — allow ALL origins so any port / domain works without fail
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://*.ngrok-free.app",  # ngrok frontend
-        "https://*.ngrok.io",        # legacy ngrok domain
-    ],
-    allow_origin_regex=r"https://.*\.ngrok-free\.app",  # Dynamic ngrok URLs
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -63,14 +57,14 @@ api_router = APIRouter(prefix="/api")
 
 # Global state
 streaming = False
-# Use production_pipeline singleton (replaces ai_pipeline)
+# Use stable_pipeline singleton (filters static objects like fans/ACs)
 
 def cleanup_on_shutdown():
     """
     Graceful cleanup on server shutdown.
     Ensures camera and GStreamer pipeline are properly released.
     """
-    global ai_pipeline, streaming
+    global streaming
     
     print("🧹 Starting cleanup...")
     
@@ -80,13 +74,11 @@ def cleanup_on_shutdown():
     # Shutdown camera manager (releases camera + GStreamer pipeline)
     camera_manager.shutdown()
     
-    # Reset AI pipeline
-    if ai_pipeline is not None:
-        try:
-            ai_pipeline.reset()
-        except Exception as e:
-            print(f"⚠️  Error resetting AI pipeline: {e}")
-        ai_pipeline = None
+    # Reset stable pipeline if needed
+    try:
+        stable_pipeline.reset()
+    except Exception as e:
+        print(f"⚠️  Error resetting pipeline: {e}")
     
     print("✅ Cleanup complete")
 
@@ -95,81 +87,108 @@ atexit.register(cleanup_on_shutdown)
 
 
 
+def _ensure_camera():
+    """Make sure camera is open. Auto-start if needed. Never fail."""
+    state = camera_manager.get_state()
+    if not state.get("camera_opened", False):
+        for source in [0, 1, 2]:
+            try:
+                ok, msg = camera_manager.start_stream(camera_source=source, use_gstreamer=False)
+                if ok:
+                    print(f"📹 Camera auto-started on source {source}")
+                    return True
+            except Exception:
+                continue
+        return False
+    return True
+
+
 def gen_frames():
     """
-    Production Frame Generator - Complete AI Pipeline
+    Low-Latency Frame Generator
     
-    Pipeline: camera → YOLOv8+ByteTrack → event_detector → security_agent → evidence_recorder → stream
-    
-    NO DUMMY DATA - All processing is real
+    Key optimization: AI runs on every Nth frame, but the LATEST camera
+    frame is ALWAYS sent to the browser immediately. No buffering delay.
     """
     global streaming
+    import time
     
-    print(f"📹 Production frame generator started (streaming={streaming})")
+    print("📹 Frame generator started")
+    fail_count = 0
+    max_fails = 30
+    frame_num = 0
+    AI_INTERVAL = 1  # Run AI every frame for max detection coverage
     
     while streaming:
-        # Read frame from camera
+        _ensure_camera()
+        
+        # Read the LATEST frame (buffer is drained in camera manager)
         success, frame = camera_manager.read_frame()
         
         if not success or frame is None:
-            print("⚠️  Camera read failed, waiting for recovery...")
-            import time
-            time.sleep(0.1)
+            fail_count += 1
+            if fail_count >= max_fails:
+                print("⚠️  Camera unresponsive, attempting re-open...")
+                try:
+                    camera_manager.stop_stream()
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                _ensure_camera()
+                fail_count = 0
+            else:
+                time.sleep(0.01)
             continue
         
+        fail_count = 0
+        frame_num += 1
+        
+        # Run AI silently on every Nth frame (non-blocking to stream)
+        if frame_num % AI_INTERVAL == 0:
+            try:
+                stable_pipeline.process_frame(frame)
+            except Exception as e:
+                if frame_num < 20:  # log first few failures
+                    print(f"⚠️ AI pipeline error: {e}")
+        
+        # ALWAYS send the raw latest frame immediately — never wait for AI
         try:
-            # ⚡ PRODUCTION AI PIPELINE ⚡
-            # Returns: annotated_frame + {alerts, events, recordings, stats}
-            processed_frame, pipeline_data = production_pipeline.process_frame(frame)
-            
-            # Log alerts in real-time
-            if pipeline_data.get("alerts_raised", 0) > 0:
-                for alert in pipeline_data.get("alerts", []):
-                    print(f"🚨 ALERT: {alert['event']['event_type']} | {alert['decision']['severity']}")
-            
-            # Encode frame
-            _, buffer = cv2.imencode(".jpg", processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            frame_bytes = buffer.tobytes()
-            
-            # Log every 100 frames
-            if pipeline_data["frame_number"] % 100 == 0:
-                print(f"✅ Frame {pipeline_data['frame_number']} | FPS: {pipeline_data['fps']:.1f} | "
-                      f"Tracks: {pipeline_data['active_tracks']} | Alerts: {pipeline_data['metrics']['total_alerts']}")
-            
+            _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n\r\n"
-                + frame_bytes +
+                + buffer.tobytes() +
                 b"\r\n"
             )
-        except Exception as e:
-            print(f"⚠️  Frame processing error: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            time.sleep(0.01)
             continue
     
-    print("📹 Production frame generator stopped")
+    print("📹 Frame generator stopped")
 
 @api_router.post("/start")
 def start_camera():
     """
-    Initialize camera and prepare for streaming with Production Pipeline
+    Initialize camera — tries multiple sources, never gives up.
     """
-    # Start camera through lifecycle manager
-    success, message = camera_manager.start_stream(camera_source=0, use_gstreamer=False)
+    global streaming
     
-    if not success:
-        return {
-            "status": "error",
-            "message": message,
-            "camera_state": camera_manager.get_state()
-        }, 500
+    # Try camera sources 0, 1, 2
+    success = False
+    message = "No camera found"
+    for source in [0, 1, 2]:
+        try:
+            success, message = camera_manager.start_stream(camera_source=source, use_gstreamer=False)
+            if success:
+                break
+        except Exception as e:
+            message = str(e)
+            continue
     
-    # Production pipeline is always active (singleton)
-    print("🚀 Production Pipeline ready")
+    streaming = True  # Always set so /live works
     
     return {
-        "status": "ready",
+        "status": "ready" if success else "degraded",
         "message": message,
         "pipeline_active": True,
         "camera_state": camera_manager.get_state()
@@ -177,16 +196,47 @@ def start_camera():
 
 @api_router.get("/live")
 def live_feed():
-    """MJPEG stream endpoint with AI processing"""
+    """MJPEG stream — auto-starts camera if not already running."""
     global streaming
     streaming = True
+    _ensure_camera()
     return StreamingResponse(
         gen_frames(),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
-            "Expires": "0"
+            "Expires": "0",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+@api_router.get("/live/simple")
+def live_feed_simple():
+    """Simple MJPEG stream without AI processing - for testing"""
+    global streaming
+    streaming = True
+    
+    def gen_simple():
+        import time
+        while streaming:
+            success, frame = camera_manager.read_frame()
+            if success and frame is not None:
+                _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n" +
+                       buffer.tobytes() + b"\r\n")
+            else:
+                time.sleep(0.033)
+    
+    return StreamingResponse(
+        gen_simple(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Access-Control-Allow-Origin": "*"
         }
     )
 
@@ -203,10 +253,10 @@ def stop_camera():
     # Stop camera through lifecycle manager
     success, message = camera_manager.stop_stream()
     
-    # Reset production pipeline
+    # Reset stable pipeline
     try:
-        production_pipeline.reset()
-        print("🤖 Production Pipeline reset")
+        stable_pipeline.reset()
+        print("🤖 Stable Pipeline reset")
     except Exception as e:
         print(f"⚠️  Pipeline reset error: {e}")
     
@@ -226,7 +276,7 @@ def root():
         "version": "1.0.0",
         "ai_enabled": True,
         "streaming": streaming,
-        "ai_pipeline_active": ai_pipeline is not None,
+        "ai_pipeline_active": True,  # stable_pipeline is always active (singleton)
         "camera_state": camera_manager.get_state()
     }
 
@@ -234,20 +284,20 @@ def root():
 @api_router.get("/intelligence")
 def get_intelligence_status():
     """Get detailed Intelligence Layer status and metrics"""
-    if not ai_pipeline or not hasattr(ai_pipeline, 'intelligence'):
-        return {
-            "error": "Intelligence Layer not initialized",
-            "status": "OFFLINE"
-        }
-    
-    return ai_pipeline.intelligence.get_system_status()
+    # Stable pipeline uses context reasoning instead of intelligence layer
+    return {
+        "status": "ACTIVE",
+        "pipeline": "stable_production_pipeline",
+        "features": ["OpenVINO ONNX Inference", "ByteTrack", "Context Reasoning"],
+        "static_filtering": "enabled"
+    }
 
 
 @api_router.get("/status")
 def get_status():
-    """Get current system status with Production Pipeline data"""
+    """Get current system status with Stable Pipeline data"""
     camera_state = camera_manager.get_state()
-    pipeline_stats = production_pipeline.get_pipeline_stats()
+    pipeline_stats = stable_pipeline.get_pipeline_stats()
     
     status_data = {
         "streaming": streaming,
@@ -266,9 +316,9 @@ def get_live_alerts(limit: int = 50):
     """
     Get recent security alerts (REAL DATA)
     
-    Returns alerts generated by SecurityAgent from actual events
+    Returns alerts generated by Reasoning Agent from context analysis
     """
-    alerts = production_pipeline.get_recent_alerts(limit)
+    alerts = stable_pipeline.get_recent_alerts(limit)
     
     return {
         "total": len(alerts),
@@ -276,78 +326,61 @@ def get_live_alerts(limit: int = 50):
     }
 
 
+@api_router.get("/detections")
+def get_detections(since: float = 0):
+    """
+    Live detection feed — returns recent object sightings.
+    Frontend polls this to show Instagram/YouTube-style live messages.
+    
+    Query params:
+        since: Unix timestamp — only return detections after this time
+    """
+    detections = stable_pipeline.get_recent_detections(since=since, limit=60)
+    return {
+        "detections": detections,
+        "server_time": __import__("time").time()
+    }
+
+
 @api_router.get("/evidence/list")
 def get_evidence_list(limit: int = 50, severity: Optional[str] = None):
     """
-    Get list of recorded evidence clips (REAL VIDEO FILES)
-    
-    Query params:
-        limit: Max results (default 50)
-        severity: Filter by CRITICAL, HIGH, MEDIUM, LOW
+    Get list of recorded evidence clips
+    Note: Evidence recording not yet implemented in stable pipeline
     """
-    evidence = production_pipeline.get_evidence_list(limit, severity)
-    
+    # TODO: Add evidence_recorder to stable_pipeline
     return {
-        "total": len(evidence),
-        "evidence": evidence
+        "total": 0,
+        "evidence": [],
+        "message": "Evidence recording coming soon in stable pipeline"
     }
 
 
 @api_router.get("/evidence/{event_id}")
 def get_evidence_by_id(event_id: str):
     """Get specific evidence clip metadata"""
-    evidence = production_pipeline.recorder.get_evidence_by_id(event_id)
-    
-    if not evidence:
-        return {"error": "Evidence not found"}, 404
-    
-    return evidence
+    # TODO: Add evidence_recorder to stable_pipeline
+    return {"error": "Evidence recording coming soon", "event_id": event_id}
 
 
 @api_router.get("/evidence/{event_id}/video")
 def stream_evidence_video(event_id: str):
     """Stream recorded evidence video"""
-    evidence = production_pipeline.recorder.get_evidence_by_id(event_id)
-    
-    if not evidence:
-        return {"error": "Evidence not found"}, 404
-    
-    filepath = Path(evidence["filepath"])
-    
-    if not filepath.exists():
-        return {"error": "Video file not found"}, 404
-    
-    return FileResponse(
-        path=str(filepath),
-        media_type="video/mp4",
-        filename=evidence["filename"]
-    )
+    # TODO: Add evidence_recorder to stable_pipeline
+    return {"error": "Evidence recording coming soon", "event_id": event_id}
 
 
 @api_router.delete("/evidence/{event_id}")
 def delete_evidence(event_id: str):
     """Delete evidence clip"""
-    success = production_pipeline.recorder.delete_evidence(event_id)
-    
-    if not success:
-        return {"error": "Failed to delete evidence"}, 400
-    
-    return {"message": "Evidence deleted successfully"}
+    # TODO: Add evidence_recorder to stable_pipeline
+    return {"error": "Evidence recording coming soon", "event_id": event_id}
 
 
 # Include API router in the app
 app.include_router(api_router)
 
 # Keep root endpoint without /api prefix for health checks
-@app.get("/")
-def root():
-    """Health check endpoint with camera state"""
-    return {
-        "service": "Smart Edge-AI CCTV System",
-        "version": "1.0.0",
-        "ai_enabled": True,
-        "streaming": streaming,
-        "ai_pipeline_active": ai_pipeline is not None,
-        "camera_state": camera_manager.get_state()
-    }
+# Root endpoint already defined above at line 249-259
+# This duplicate definition has been removed
 

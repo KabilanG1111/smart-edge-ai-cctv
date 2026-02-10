@@ -131,13 +131,17 @@ class CameraLifecycleManager:
             else:
                 # Windows: Use DirectShow backend for proper webcam access
                 self.cap = cv2.VideoCapture(camera_source, cv2.CAP_DSHOW)
-                # Reduce buffer size for low latency (minimize frame lag)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 logger.info(f"📹 OpenCV VideoCapture with DirectShow: {camera_source}")
             
             # Verify camera opened successfully
             if not self.cap.isOpened():
                 raise RuntimeError(f"Failed to open camera source: {camera_source}")
+            
+            # LOW-LATENCY settings — minimize buffer to get latest frame
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
             
             # Test read a frame
             success, frame = self.cap.read()
@@ -212,19 +216,28 @@ class CameraLifecycleManager:
     
     def read_frame(self) -> Tuple[bool, Optional[np.ndarray]]:
         """
-        Read a frame from the camera (thread-safe).
+        Read the LATEST frame from the camera (skips buffered/stale frames).
+        Uses grab+retrieve pattern to drain the OS buffer.
         
         Returns:
             Tuple[bool, Optional[np.ndarray]]: (success, frame)
         """
-        if not self.streaming or self.state != CameraState.RUNNING:
+        if not self.streaming:
+            return False, None
+            
+        if self.state != CameraState.RUNNING:
             return False, None
         
         if self.cap is None or not self.cap.isOpened():
-            logger.error("❌ Camera not available for reading")
             return False, None
         
         try:
+            # Drain buffer: grab (discard) stale frames to get the latest one
+            # This is the key to low-latency — without this, you see old frames
+            for _ in range(4):
+                self.cap.grab()
+            
+            # Now retrieve the latest frame
             success, frame = self.cap.read()
             if success:
                 with self._state_lock:

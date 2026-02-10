@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Stream Test</title>
+    <style>
+        body {
+            background: #000;
+            color: #0ff;
+            font-family: monospace;
+            padding: 20px;
+        }
+        img {
+            border: 2px solid #0ff;
+            max-width: 100%;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            background: #111;
+            border: 1px solid #0ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 Direct MJPEG Stream Test</h1>
+    
+    <div class="status" id="status">
+        Status: Loading...
+    </div>
+    
+    <button onclick="startStream()" style="padding: 10px 20px; margin: 10px; background: #0ff; color: #000; border: none; cursor: pointer;">START STREAM</button>
+    <button onclick="location.reload()" style="padding: 10px 20px; margin: 10px; background: #f00; color: #fff; border: none; cursor: pointer;">RELOAD</button>
+    
+    <div style="margin-top: 20px;">
+        <img id="stream" src="" alt="Video stream will appear here" />
+    </div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const streamImg = document.getElementById('stream');
+        
+        async function startStream() {
+            try {
+                statusDiv.textContent = 'Status: Starting camera...';
+                
+                // Start camera
+                const startRes = await fetch('http://localhost:8000/api/start', {
+                    method: 'POST'
+                });
+                const startData = await startRes.json();
+                console.log('Start response:', startData);
+                
+                if (startData.status === 'ready') {
+                    statusDiv.textContent = 'Status: Camera started! Loading stream...';
+                    
+                    // Load stream
+                    streamImg.src = `http://localhost:8000/api/live?t=${Date.now()}`;
+                    streamImg.onload = () => {
+                        statusDiv.textContent = 'Status: ✅ STREAM ACTIVE';
+                    };
+                    streamImg.onerror = (e) => {
+                        statusDiv.textContent = 'Status: ❌ Stream load error: ' + e;
+                        console.error('Stream error:', e);
+                    };
+                } else {
+                    statusDiv.textContent = 'Status: ❌ Camera start failed: ' + startData.message;
+                }
+            } catch (error) {
+                statusDiv.textContent = 'Status: ❌ Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Auto-check status on load
+        fetch('http://localhost:8000/api/status')
+            .then(r => r.json())
+            .then(data => {
+                statusDiv.textContent = `Status: Camera ${data.camera_active ? 'ACTIVE' : 'INACTIVE'}, Streaming: ${data.streaming}`;
+                if (data.camera_active) {
+                    streamImg.src = `http://localhost:8000/api/live?t=${Date.now()}`;
+                }
+            })
+            .catch(e => statusDiv.textContent = 'Status: Backend offline');
+    </script>
+</body>
+</html>

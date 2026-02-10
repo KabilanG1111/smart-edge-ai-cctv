@@ -1,25 +1,17 @@
 # ByteTrack Configuration for YOLOv8
 # Ultralytics built-in tracker config
 
-# Tracker type (BoT-SORT or ByteTrack)
+# Tracker type
 tracker_type: bytetrack
 
-# ByteTrack Parameters
-bytetrack:
-  # Detection confidence thresholds
-  track_high_thresh: 0.5    # High confidence threshold for track initialization
-  track_low_thresh: 0.1     # Low confidence threshold for track association
-  new_track_thresh: 0.6     # Threshold for new track creation
-  
-  # Track lifecycle
-  track_buffer: 30          # Frames to keep lost tracks (30 frames = ~1 sec at 30 FPS)
-  match_thresh: 0.8         # IoU threshold for matching detections to tracks
-  
-  # Misc
-  frame_rate: 30            # Expected FPS (adjust based on your camera)
+# Detection confidence thresholds
+track_high_thresh: 0.5
+track_low_thresh: 0.1
+new_track_thresh: 0.6
 
-# NOTES:
-# - track_high_thresh: Detections above this start new tracks
-# - track_low_thresh: Lower detections can extend existing tracks (reduces ID switches)
-# - track_buffer: Higher = more robust to occlusions, but uses more memory
-# - match_thresh: Higher = stricter matching (fewer ID switches but more new IDs)
+# Track lifecycle
+track_buffer: 30
+match_thresh: 0.8
+
+# Misc
+fuse_score: True

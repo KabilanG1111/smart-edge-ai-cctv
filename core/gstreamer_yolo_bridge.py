@@ -139,46 +139,8 @@ def on_new_sample(sink):
                     CLASS_COLORS[class_id] = tuple(map(int, np.random.randint(0, 255, 3)))
                 color = CLASS_COLORS[class_id]
             
-            # ========================================
-            # DRAW BOUNDING BOX
-            # ========================================
-            # Thickness=5 for YOLO detections (vs thickness=2 for motion/ROI)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 5)
-            
-            # ========================================
-            # DRAW LABEL with TRACKING ID
-            # ========================================
-            # Format: "ID:123 person 0.95" (includes tracking ID)
-            if track_id is not None:
-                label = f"ID:{track_id} {class_name} {confidence:.2f}"
-            else:
-                label = f"YOLO: {class_name} {confidence:.2f}"
-            
-            # Calculate label background size
-            (label_width, label_height), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
-            )
-            
-            # Draw label background (filled rectangle)
-            cv2.rectangle(
-                frame,
-                (x1, y1 - label_height - 10),
-                (x1 + label_width, y1),
-                color,
-                -1  # Filled
-            )
-            
-            # Draw label text (white text on colored background)
-            cv2.putText(
-                frame,
-                label,
-                (x1, y1 - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),  # White text
-                1,
-                cv2.LINE_AA
-            )
+            # All visual rendering removed — detection runs silently
+            # No bounding boxes, labels, or confidence scores drawn
     
     # ========================================
     # STEP 5: Display Annotated Frame
