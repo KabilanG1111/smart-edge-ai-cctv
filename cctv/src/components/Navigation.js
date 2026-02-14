@@ -22,6 +22,7 @@ const Navigation = () => {
             <nav className="nav-list">
                 <NavItem to="/" icon="⦿" label="LIVE FEED" expanded={expanded} />
                 <NavItem to="/alerts" icon="⚡" label="THREAT INTEL" expanded={expanded} />
+                <NavItem to="/intelligence-core" icon="🧠" label="AI CORE" expanded={expanded} />
                 <NavItem to="/evidence" icon="📁" label="EVIDENCE" expanded={expanded} />
                 <NavItem to="/copilot" icon="🤖" label="AI AGENT" expanded={expanded} />
             </nav>

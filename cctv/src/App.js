@@ -7,6 +7,7 @@ import LiveStream from "./pages/LiveStream";
 import EvidenceVault from "./pages/EvidenceVault";
 import AlertCenter from "./pages/AlertCenter";
 import AICopilot from "./pages/AICopilot";
+import IntelligenceCore from "./pages/IntelligenceCore";
 import "./App.css";
 
 let runtimeBootFlag = false;
@@ -44,6 +45,7 @@ function App() {
               <Route path="/evidence" element={<EvidenceVault />} />
               <Route path="/alerts" element={<AlertCenter />} />
               <Route path="/copilot" element={<AICopilot />} />
+              <Route path="/intelligence-core" element={<IntelligenceCore />} />
             </Routes>
           </div>
 
