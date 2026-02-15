@@ -1,17 +1,14 @@
 ﻿# main_api.py
-from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, APIRouter
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import signal
 import sys
 import atexit
-import asyncio
-import json
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 # STABLE PIPELINE: OpenVINO + ByteTrack + Context Reasoning (filters static objects!)
 from core.stable_production_pipeline import stable_pipeline
@@ -22,12 +19,6 @@ from backend.event_store import (
     publish_event, get_events, EventType, EventSeverity,
     generate_reasoning_text, get_severity_level
 )
-
-# BEHAVIOR ENGINE: Real-time rule-based reasoning
-from backend.behavior_engine import behavior_engine
-
-# REASONING ENGINE: Real-time reasoning with temporal analysis
-from core.reasoning_engine import get_reasoning_engine
 
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
@@ -73,34 +64,6 @@ api_router = APIRouter(prefix="/api")
 # Global state
 streaming = False
 # Use stable_pipeline singleton (filters static objects like fans/ACs)
-
-# WebSocket connections for real-time reasoning
-connected_clients: List[WebSocket] = []
-reasoning_engine = get_reasoning_engine()
-
-# Async broadcast function
-async def broadcast_reasoning(events: List[dict]):
-    """
-    Broadcast reasoning events to all connected WebSocket clients
-    """
-    if not events or not connected_clients:
-        return
-    
-    # Prepare message
-    message = json.dumps({"events": events})
-    
-    # Broadcast to all clients
-    disconnected = []
-    for client in connected_clients:
-        try:
-            await client.send_text(message)
-        except Exception:
-            disconnected.append(client)
-    
-    # Remove disconnected clients
-    for client in disconnected:
-        if client in connected_clients:
-            connected_clients.remove(client)
 
 def cleanup_on_shutdown():
     """
@@ -189,59 +152,7 @@ def gen_frames():
         # Run AI silently on every Nth frame (non-blocking to stream)
         if frame_num % AI_INTERVAL == 0:
             try:
-                # 🔍 STEP 1-5: Process frame and get ANNOTATED frame with bounding boxes
-                annotated_frame, pipeline_data = stable_pipeline.process_frame(frame, annotate=True)
-                
-                # 📊 DEBUG: Log pipeline stats every 30 frames
-                if frame_num % 30 == 0:
-                    print(f"🔍 Frame {frame_num}: {pipeline_data.get('detections', 0)} detections, "
-                          f"{pipeline_data.get('tracked_objects', 0)} tracked")
-                
-                # Use annotated frame for streaming (has bounding boxes)
-                frame = annotated_frame
-                
-                # 🧠 REAL-TIME REASONING ENGINE (every frame)
-                try:
-                    current_time = time.time()
-                    recent_detections = stable_pipeline.get_recent_detections(since=current_time - 1.0, limit=20)
-                    
-                    # Convert detections to track format
-                    if recent_detections:
-                        tracks = []
-                        for det in recent_detections:
-                            if det.get('track_id') and det.get('bbox'):
-                                tracks.append({
-                                    'track_id': det['track_id'],
-                                    'class_name': det.get('class_name', 'unknown'),
-                                    'bbox': det['bbox'],
-                                    'confidence': det.get('confidence', 0.0),
-                                    'class_id': det.get('class_id', 0)
-                                })
-                        
-                        if tracks:
-                            # 🧠 Run reasoning engine
-                            reasoning_events = reasoning_engine.analyze_frame(tracks, current_time)
-                            
-                            # Convert reasoning events to dict format for WebSocket
-                            if reasoning_events:
-                                events_data = [
-                                    {
-                                        "severity": event.severity,
-                                        "message": event.message,
-                                        "color": event.color,
-                                        "timestamp": event.timestamp,
-                                        "track_id": event.track_id,
-                                        "class_name": event.class_name,
-                                        "metadata": event.metadata or {}
-                                    }
-                                    for event in reasoning_events
-                                ]
-                                
-                                # Broadcast to connected WebSocket clients
-                                if connected_clients:
-                                    asyncio.create_task(broadcast_reasoning(events_data))
-                except Exception:
-                    pass  # Silent failure for non-blocking performance
+                stable_pipeline.process_frame(frame)
                 
                 # Publish events from pipeline alerts (every 30 frames ~ 1 second)
                 if frame_num % 30 == 0:
@@ -595,117 +506,6 @@ def publish_test_events():
         "total_events_in_store": len(get_events(50))
     }
 
-
-@api_router.get("/intelligence/live")
-def get_live_intelligence(limit: int = 50):
-    """
-    Get real-time behavior reasoning events from camera feed.
-    
-    This endpoint returns live AI reasoning generated from actual
-    camera detections and track analysis. Events include:
-    - LOITERING: Stationary behavior detection
-    - RUNNING: High-velocity movement
-    - FIGHTING: Aggressive interactions between subjects
-    - INTRUSION: Restricted zone breaches
-    - NORMAL: Routine activity
-    
-    Each event includes severity classification:
-    - NORMAL: Green indicator
-    - WARNING: Yellow/amber alert
-    - CRITICAL: Red alert with immediate attention required
-    
-    Query params:
-        limit: Maximum number of events to return (default: 50)
-    
-    Returns:
-        {
-            "status": "active",
-            "total": 12,
-            "events": [
-                {
-                    "track_id": 42,
-                    "event_type": "LOITERING",
-                    "severity": "WARNING",
-                    "reasoning": "Subject 42 stationary for 12.3s...",
-                    "timestamp": "2026-02-15T10:30:45",
-                    "velocity": 5.2,
-                    "duration": 12.3
-                },
-                ...
-            ]
-        }
-    """
-    events = behavior_engine.get_live_events(limit)
-    
-    return {
-        "status": "active",
-        "total": len(events),
-        "events": events
-    }
-
-
-@app.websocket("/ws/reasoning")
-async def reasoning_websocket(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time reasoning events
-    
-    Clients connect here to receive live reasoning events as they occur.
-    Events are broadcast immediately after each frame analysis.
-    
-    Message format:
-    {
-        "events": [
-            {
-                "severity": "WARNING",
-                "message": "Person ID 42 loitering for 20s",
-                "color": "yellow",
-                "timestamp": 1708000000.0,
-                "track_id": 42,
-                "class_name": "person",
-                "metadata": {"duration": 20.0}
-            },
-            ...
-        ]
-    }
-    
-    Severity levels:
-    - CRITICAL → red
-    - WARNING → yellow
-    - NORMAL → cyan
-    """
-    await websocket.accept()
-    connected_clients.append(websocket)
-    
-    print(f"🔌 WebSocket client connected. Total clients: {len(connected_clients)}")
-    
-    try:
-        # Send initial message
-        await websocket.send_json({
-            "status": "connected",
-            "message": "Real-time reasoning engine active",
-            "timestamp": time.time()
-        })
-        
-        # Keep connection alive
-        while True:
-            # Wait for client messages (ping/pong)
-            try:
-                data = await websocket.receive_text()
-                # Echo back for heartbeat
-                await websocket.send_json({"status": "alive", "timestamp": time.time()})
-            except WebSocketDisconnect:
-                break
-            except Exception:
-                await asyncio.sleep(1)
-    
-    except WebSocketDisconnect:
-        print(f"🔌 WebSocket client disconnected")
-    except Exception as e:
-        print(f"⚠️ WebSocket error: {e}")
-    finally:
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
-        print(f"🔌 Client removed. Total clients: {len(connected_clients)}")
 
 
 # Include API router in the app

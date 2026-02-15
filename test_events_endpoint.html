@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Intelligence Events Endpoint</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0a0f1e;
+            color: #ffffff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #00ffff;
+            text-align: center;
+        }
+        .status {
+            background: #1a1f3a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .event-card {
+            background: #1a1f3a;
+            border-left: 4px solid #00ffff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .severity-critical { background: #ff0055; color: white; }
+        .severity-high { background: #ff4400; color: white; }
+        .severity-medium { background: #ff9100; color: white; }
+        .severity-low { background: #00ff88; color: #000; }
+        .event-type {
+            background: #00ffff20;
+            border: 1px solid #00ffff;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 9px;
+            margin-right: 8px;
+        }
+        .track-id {
+            background: #ffffff15;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-family: 'Courier New', monospace;
+            margin-right: 8px;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 12px;
+        }
+        .reasoning-text {
+            margin-top: 10px;
+            color: #ccc;
+            line-height: 1.5;
+        }
+        button {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #00cccc;
+        }
+        .error {
+            background: #ff0055;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Intelligence Events API Test</h1>
+        
+        <div class="status" id="status">
+            <strong>Status:</strong> <span id="statusText">Initializing...</span><br>
+            <strong>Total Events:</strong> <span id="totalEvents">0</span><br>
+            <strong>Last Updated:</strong> <span id="lastUpdate">Never</span>
+        </div>
+
+        <div style="text-align: center;">
+            <button onclick="fetchEvents()">🔄 Refresh Events</button>
+            <button onclick="testEndpoint()">🔍 Test Endpoint</button>
+            <button onclick="startPolling()">▶️ Start Polling (1s)</button>
+            <button onclick="stopPolling()">⏸️ Stop Polling</button>
+        </div>
+
+        <div id="events"></div>
+    </div>
+
+    <script>
+        let pollingInterval = null;
+
+        async function testEndpoint() {
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = 'Testing endpoint...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/intelligence/events?limit=10');
+                if (response.ok) {
+                    statusText.textContent = '✅ Endpoint working!';
+                    statusText.style.color = '#00ff88';
+                    const data = await response.json();
+                    console.log('Endpoint test:', data);
+                } else {
+                    statusText.textContent = `❌ Error ${response.status}`;
+                    statusText.style.color = '#ff0055';
+                }
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = '#ff0055';
+            }
+        }
+
+        async function fetchEvents() {
+            const eventsDiv = document.getElementById('events');
+            const statusText = document.getElementById('statusText');
+            const totalEvents = document.getElementById('totalEvents');
+            const lastUpdate = document.getElementById('lastUpdate');
+
+            try {
+                const response = await fetch('http://localhost:8000/api/intelligence/events?limit=50');
+                const data = await response.json();
+
+                statusText.textContent = data.status === 'active' ? '✅ Active' : '⚠️ ' + data.status;
+                statusText.style.color = data.status === 'active' ? '#00ff88' : '#ff9100';
+                totalEvents.textContent = data.total;
+                lastUpdate.textContent = new Date().toLocaleTimeString();
+
+                if (data.events && data.events.length > 0) {
+                    eventsDiv.innerHTML = '<h2>📋 Recent Events</h2>';
+                    data.events.forEach(event => {
+                        const card = document.createElement('div');
+                        card.className = 'event-card';
+                        card.innerHTML = `
+                            <div>
+                                <span class="severity-badge severity-${event.severity.toLowerCase()}">${event.severity}</span>
+                                <span class="event-type">${event.event_type}</span>
+                                <span class="track-id">Track ID: ${event.track_id}</span>
+                                <span class="timestamp">${event.timestamp}</span>
+                            </div>
+                            <div class="reasoning-text">${event.reasoning_text}</div>
+                            <div style="margin-top: 8px; font-size: 11px; color: #666;">
+                                Duration: ${event.duration}s | Score: ${event.severity_score.toFixed(2)}
+                            </div>
+                        `;
+                        eventsDiv.appendChild(card);
+                    });
+                } else {
+                    eventsDiv.innerHTML = '<div class="status">No events yet. Start the camera to generate events.</div>';
+                }
+            } catch (error) {
+                eventsDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function startPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            fetchEvents(); // Initial fetch
+            pollingInterval = setInterval(fetchEvents, 1000);
+            document.getElementById('statusText').textContent = '▶️ Polling every 1 second';
+        }
+
+        function stopPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            document.getElementById('statusText').textContent = '⏸️ Polling stopped';
+        }
+
+        // Initial test
+        testEndpoint();
+    </script>
+</body>
+</html>

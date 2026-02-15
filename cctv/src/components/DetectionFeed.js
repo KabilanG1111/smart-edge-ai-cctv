@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./DetectionFeed.css";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8001/api";
 
 // Emoji map for detected object classes (YOLO COCO 80 classes)
 const CLASS_ICONS = {

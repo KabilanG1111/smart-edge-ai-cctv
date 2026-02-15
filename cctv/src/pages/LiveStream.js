@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import DetectionFeed from "../components/DetectionFeed";
 import "./LiveStream.css";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8001/api";
 
 const LiveStream = () => {
     const [live, setLive] = useState(false);

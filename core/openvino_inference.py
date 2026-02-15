@@ -345,8 +345,19 @@ class OpenVINOInference:
         self.infer_request.infer({self.input_layer: input_tensor})
         outputs = self.infer_request.get_output_tensor(0).data
         
+        # 🔎 STEP 1: DEBUG - Log raw output shape
+        if self.frame_count % 30 == 0:
+            logger.info(f"Raw YOLO output shape: {outputs.shape}")
+        
         # Postprocess
         detections = self.postprocess(outputs, frame.shape[:2])
+        
+        # 🔎 STEP 1: DEBUG - Log detection count
+        if self.frame_count % 30 == 0:
+            logger.info(f"✅ OpenVINO Detections: {len(detections)} objects found")
+            if detections:
+                for det in detections[:3]:  # Show first 3
+                    logger.info(f"   - {det.class_name}: {det.confidence:.2f} at {det.bbox}")
         
         # Performance tracking
         elapsed = time.time() - start_time
@@ -379,19 +390,33 @@ class FallbackYOLOInference:
     """
     Fallback to ultralytics YOLO if OpenVINO not available
     """
-    def __init__(self, model_path: str = "yolov8n.pt", conf_threshold: float = 0.35, **kwargs):
+    def __init__(self, model_path: str = "yolov8n.pt", conf_threshold: float = 0.25, **kwargs):
         from ultralytics import YOLO
         self.model = YOLO(model_path)
         self.conf_threshold = conf_threshold
+        self.frame_count = 0
         logger.warning("⚠️ Using fallback ultralytics YOLO (OpenVINO not available)")
+        logger.info(f"   Confidence threshold: {conf_threshold}")
+        logger.info(f"   Model: {model_path}")
+        logger.info(f"   🔎 STEP 3: Loaded classes: {list(self.model.names.values())[:10]}...")
     
     def infer(self, frame: np.ndarray) -> List[Detection]:
-        results = self.model.predict(frame, conf=self.conf_threshold, verbose=False)
+        # 🔎 STEP 2: Convert BGR → RGB (CRITICAL for accuracy)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # 🔎 STEP 1: Run inference with debug
+        results = self.model.predict(frame_rgb, conf=self.conf_threshold, verbose=False)
+        
+        self.frame_count += 1
         
         detections = []
         for result in results:
             if result.boxes is None:
                 continue
+            
+            # 🔎 STEP 1: Log raw detection count
+            if self.frame_count % 30 == 0:
+                logger.info(f"✅ YOLO Raw Detections: {len(result.boxes)} objects")
             
             for box in result.boxes:
                 class_id = int(box.cls[0])
@@ -410,6 +435,13 @@ class FallbackYOLOInference:
                     class_id=class_id,
                     class_name=class_name
                 ))
+        
+        # 🔎 STEP 1: Log final detection count (after filtering)
+        if self.frame_count % 30 == 0:
+            logger.info(f"   After filtering: {len(detections)} objects (static removed)")
+            if detections:
+                for det in detections[:3]:  # Show first 3
+                    logger.info(f"   - {det.class_name}: {det.confidence:.2f}")
         
         return detections
     

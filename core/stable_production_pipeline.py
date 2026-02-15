@@ -100,11 +100,11 @@ class StableProductionPipeline:
     
     def __init__(
         self,
-        model_path: str = "models/openvino/yolov8n.xml",
+        model_path: str = "models/openvino/yolov8s.xml",  # Using SMALL model for better accuracy
         zone_config_path: str = "config/zones.yaml",
         use_openvino: bool = True,
-        conf_threshold: float = 0.35,
-        input_size: int = 320
+        conf_threshold: float = 0.20,  # Lowered to 20% for better detection coverage
+        input_size: int = 640  # Increased to 640 for production-grade accuracy
     ):
         """
         Initialize stable production pipeline
@@ -113,7 +113,7 @@ class StableProductionPipeline:
             model_path: Path to OpenVINO IR (.xml) or PyTorch (.pt)
             zone_config_path: Path to zone definitions YAML
             use_openvino: Try to use OpenVINO if available
-            conf_threshold: Detection confidence threshold
+            conf_threshold: Detection confidence threshold (20% = more detections, 50% = fewer but more confident)
             input_size: Model input size (320 for speed, 640 for accuracy)
         """
         logger.info("=" * 60)
@@ -125,8 +125,8 @@ class StableProductionPipeline:
         if not model_path_obj.exists():
             logger.warning(f"⚠️ OpenVINO model not found: {model_path}")
             logger.info("📦 Falling back to PyTorch YOLOv8")
-            # Try common YOLOv8 model paths
-            fallback_paths = ["yolov8n.pt", "yolov8s.pt", "models/yolov8n.pt"]
+            # Try common YOLOv8 model paths (prefer SMALL model for better accuracy)
+            fallback_paths = ["yolov8s.pt", "yolov8n.pt", "models/yolov8s.pt", "models/yolov8n.pt"]
             for fallback in fallback_paths:
                 if Path(fallback).exists():
                     model_path = fallback
@@ -134,8 +134,9 @@ class StableProductionPipeline:
                     logger.info(f"✅ Using PyTorch model: {model_path}")
                     break
             else:
-                logger.error("❌ No YOLOv8 model found!")
-                model_path = "yolov8n.pt"  # Will auto-download
+                logger.warning("❌ No YOLOv8 model found locally!")
+                logger.info("📥 Auto-downloading YOLOv8-SMALL for better accuracy...")
+                model_path = "yolov8s.pt"  # Will auto-download SMALL model (11MB vs 6MB nano)
                 use_openvino = False
         
         # Load zone configuration
@@ -209,17 +210,88 @@ class StableProductionPipeline:
                 "suspicious_threshold": 0.7,
                 "alert_cooldown": 120
             }
-        }
-    
-    def process_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, Dict]:
+        }    
+    def annotate_frame(self, frame: np.ndarray, detections: List, tracked_detections: List) -> np.ndarray:
+        """
+        Draw bounding boxes and labels on frame
+        
+        Args:
+            frame: Input BGR image
+            detections: Raw detections from inference
+            tracked_detections: Detections with track IDs
+            
+        Returns:
+            Annotated frame with bounding boxes
+        """
+        annotated = frame.copy()
+        
+        # Color scheme
+        COLOR_BOX = (0, 255, 0)  # Green
+        COLOR_TEXT = (0, 255, 0)  # Green
+        COLOR_TRACK_ID = (0, 255, 255)  # Cyan
+        
+        for det in tracked_detections:
+            # Extract bbox coordinates
+            x1, y1, x2, y2 = map(int, det.bbox)
+            
+            # Draw bounding box
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), COLOR_BOX, 2)
+            
+            # Prepare label text
+            conf_pct = int(det.confidence * 100)
+            label = f"{det.class_name} {conf_pct}%"
+            
+            # Add track ID if available
+            if hasattr(det, 'track_id'):
+                label += f" ID:{det.track_id}"
+            
+            # Draw label background
+            (label_w, label_h), baseline = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
+            )
+            cv2.rectangle(
+                annotated,
+                (x1, y1 - label_h - 10),
+                (x1 + label_w, y1),
+                COLOR_BOX,
+                -1
+            )
+            
+            # Draw label text
+            cv2.putText(
+                annotated,
+                label,
+                (x1, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 0),  # Black text on green background
+                2
+            )
+        
+        # Add frame info overlay
+        info_text = f"Detections: {len(tracked_detections)} | Frame: {self.frame_count}"
+        cv2.putText(
+            annotated,
+            info_text,
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2
+        )
+        
+        return annotated    
+    def process_frame(self, frame: np.ndarray, annotate: bool = True) -> Tuple[np.ndarray, Dict]:
         """
         Process single frame through complete pipeline
         
         Args:
             frame: Input BGR image
+            annotate: If True, draw bounding boxes on returned frame
             
         Returns:
-            Tuple of (clean_frame, pipeline_data)
+            Tuple of (frame, pipeline_data)
+            Frame will be annotated if annotate=True, clean if False
         """
         start_time = time.time()
         self.frame_count += 1
@@ -227,6 +299,10 @@ class StableProductionPipeline:
         
         # STEP 1: OpenVINO Inference (YOLOv8 ONNX)
         detections = self.inference_engine.infer(frame)
+        
+        # 🔎 DEBUG: Log detection count every 30 frames
+        if self.frame_count % 30 == 0:
+            logger.info(f"Frame {self.frame_count}: {len(detections)} raw detections")
         
         # STEP 2: ByteTrack Multi-Object Tracking
         tracked_detections = self.tracker.update(detections, frame.shape[:2])
@@ -332,8 +408,13 @@ class StableProductionPipeline:
             }
         }
         
-        # Return clean frame (no annotations for privacy)
-        return frame.copy(), pipeline_data
+        # Return annotated frame if requested (default behavior)
+        if annotate:
+            annotated_frame = self.annotate_frame(frame, detections, tracked_detections)
+            return annotated_frame, pipeline_data
+        else:
+            # Return clean frame (for privacy/recording)
+            return frame.copy(), pipeline_data
     
     def get_recent_detections(self, since: float = 0, limit: int = 60) -> List[Dict]:
         """Get recent detection feed entries"""

@@ -282,6 +282,71 @@
     font-family: 'Courier New', monospace;
 }
 
+/* Historical Data Indicator */
+.historical-indicator {
+    margin: -8px -24px 16px -24px;
+    padding: 12px 24px;
+    background: linear-gradient(90deg, 
+        rgba(255, 145, 0, 0.15) 0%, 
+        rgba(255, 145, 0, 0.05) 50%, 
+        rgba(255, 145, 0, 0.15) 100%);
+    border-top: 1px solid rgba(255, 145, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 145, 0, 0.3);
+    overflow: hidden;
+    position: relative;
+}
+
+.historical-indicator::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 145, 0, 0.1), 
+        transparent);
+    animation: historicalScan 3s linear infinite;
+}
+
+@keyframes historicalScan {
+    0% { left: -100%; }
+    100% { left: 200%; }
+}
+
+.historical-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.historical-icon {
+    font-size: 18px;
+    filter: drop-shadow(0 0 8px #ff9100);
+}
+
+.historical-text {
+    flex: 1;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+}
+
+.historical-badge {
+    padding: 4px 12px;
+    background: rgba(255, 145, 0, 0.2);
+    border: 1px solid #ff9100;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #ff9100;
+    text-shadow: 0 0 10px rgba(255, 145, 0, 0.5);
+}
+
 /* Summary Metrics Grid */
 .summary-metrics {
     display: grid;
@@ -967,9 +1032,139 @@
     border-radius: 6px;
     padding: 12px;
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
     animation: slideInRight 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 🎯 NEW: Enhanced event entry layouts */
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.log-type-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.event-type-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    background: rgba(0, 217, 255, 0.15);
+    border: 1px solid rgba(0, 217, 255, 0.4);
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #00d9ff;
+    text-transform: uppercase;
+}
+
+.track-id-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: 'Courier New', monospace;
+}
+
+.duration-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'Courier New', monospace;
+}
+
+.log-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+/* 🎯 NEW: Severity badges with color coding */
+.severity-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    border: 1px solid;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.severity-badge.critical {
+    background: rgba(255, 0, 85, 0.2);
+    border-color: #ff0055;
+    color: #ff0055;
+    box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+}
+
+.severity-badge.warning {
+    background: rgba(255, 145, 0, 0.2);
+    border-color: #ff9100;
+    color: #ff9100;
+    box-shadow: 0 0 8px rgba(255, 145, 0, 0.3);
+}
+
+.severity-badge.high {
+    background: rgba(255, 68, 0, 0.2);
+    border-color: #ff4400;
+    color: #ff4400;
+    box-shadow: 0 0 8px rgba(255, 68, 0, 0.2);
+}
+
+.severity-badge.medium {
+    background: rgba(255, 145, 0, 0.2);
+    border-color: #ff9100;
+    color: #ff9100;
+}
+
+.severity-badge.normal {
+    background: rgba(0, 217, 255, 0.1);
+    border-color: #00d9ff;
+    color: #00d9ff;
+    box-shadow: 0 0 8px rgba(0, 217, 255, 0.2);
+}
+
+.severity-badge.low {
+    background: rgba(0, 255, 136, 0.1);
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
+/* Enhanced severity indicator bar */
+.log-severity {
+    width: 100%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.severity-indicator {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease-out;
+    box-shadow: 0 0 8px currentColor;
 }
 
 @keyframes slideInRight {
@@ -983,27 +1178,44 @@
     }
 }
 
-.log-entry.critical {
+/* Event type-specific styling */
+.log-entry.critical,
+.log-entry.loitering {
     border-left-color: #ff0055;
     background: rgba(255, 0, 85, 0.05);
 }
 
-.log-entry.warning {
+.log-entry.warning,
+.log-entry.zone_violation,
+.log-entry.intrusion {
     border-left-color: #ff9100;
+    background: rgba(255, 145, 0, 0.05);
+}
+
+.log-entry.fighting,
+.log-entry.theft_suspected {
+    border-left-color: #ff4400;
+    background: rgba(255, 68, 0, 0.05);
+}
+
+.log-entry.monitoring,
+.log-entry.normal {
+    border-left-color: #00d9ff;
 }
 
 .log-time {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.5);
     font-family: 'Courier New', monospace;
-    min-width: 70px;
+    font-weight: 500;
 }
 
 .log-message {
     flex: 1;
     font-size: 12px;
     color: rgba(255, 255, 255, 0.9);
-    line-height: 1.4;
+    line-height: 1.5;
+    letter-spacing: 0.2px;
 }
 
 .log-severity {

@@ -4,17 +4,23 @@ import './IntelligenceCore.css';
 
 const IntelligenceCore = () => {
     const [reasoningData, setReasoningData] = useState(null);
+    const [lastActiveData, setLastActiveData] = useState(null); // Persist last active state
+    const [isLiveData, setIsLiveData] = useState(false); // Track if data is live or historical
+    const [lastActiveTime, setLastActiveTime] = useState(null); // When was last activity
     const [eventLog, setEventLog] = useState([]);
+    const [reasoningEvents, setReasoningEvents] = useState([]); // 🎯 NEW: Structured reasoning events
     const [isConnected, setIsConnected] = useState(false);
+    const [isReasoningConnected, setIsReasoningConnected] = useState(false); // 🧠 NEW: Reasoning engine connection
     const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
     const wsRef = useRef(null);
+    const reasoningWsRef = useRef(null); // 🧠 NEW: Reasoning WebSocket ref
     const logRef = useRef(null);
 
     // WebSocket connection for real-time reasoning stream
     useEffect(() => {
         const connectWebSocket = () => {
             // PRIMARY endpoint: /ws/intelligence (production-grade streaming)
-            const ws = new WebSocket('ws://localhost:8000/ws/intelligence');
+            const ws = new WebSocket('ws://localhost:8001/ws/intelligence');
             
             ws.onopen = () => {
                 console.log('🧠 Intelligence Core connected - real-time reasoning active');
@@ -27,20 +33,39 @@ const IntelligenceCore = () => {
                 // Update last update timestamp
                 setLastUpdateTime(new Date());
                 
-                // Smooth state update with animation trigger
-                setReasoningData(prevData => {
-                    // Trigger glow effect on severity changes
-                    if (prevData && data.threat_level !== prevData.threat_level) {
-                        // Visual feedback for threat level changes
-                        if (data.threat_level > 0.75) {
-                            console.log('⚠️ CRITICAL THREAT DETECTED:', data.threat_level);
-                        }
+                // 🔥 PERSISTENCE LOGIC: Detect if this is live or idle data
+                const hasActiveData = data.active_tracks > 0 || data.system_state !== 'IDLE';
+                
+                if (hasActiveData) {
+                    // Live data detected - update both current and last active
+                    setIsLiveData(true);
+                    setLastActiveTime(new Date());
+                    setLastActiveData(data); // Save for persistence
+                    setReasoningData(data);
+                    
+                    // Log critical threats
+                    if (data.threat_level > 0.75) {
+                        console.log(`⚠️ CRITICAL: ${data.active_tracks} tracks | ${(data.threat_level * 100).toFixed(0)}% threat`);
+                    } else if (data.active_tracks > 0) {
+                        console.log(`🎯 LIVE DATA: ${data.active_tracks} tracks | ${(data.threat_level * 100).toFixed(0)}% threat`);
                     }
-                    return data;
-                });
+                } else {
+                    // IDLE state - check if we have historical data to display
+                    const storedData = lastActiveData || JSON.parse(localStorage.getItem('intelligence_core_last_active') || 'null');
+                    
+                    if (storedData && storedData.active_tracks > 0) {
+                        setIsLiveData(false);
+                        setLastActiveData(storedData);
+                        setReasoningData(storedData); // Show historical data
+                        console.log('📊 Showing historical data (camera idle)');
+                    } else {
+                        // No historical data available, show idle
+                        setReasoningData(data);
+                    }
+                }
                 
                 // Add to event log if there are new events or threats
-                if (data.events?.length > 0 || data.critical_count > 0) {
+                if (hasActiveData && (data.events?.length > 0 || data.critical_count > 0)) {
                     const newLog = {
                         id: Date.now() + Math.random(), // Ensure unique IDs
                         timestamp: new Date().toLocaleTimeString(),
@@ -50,11 +75,6 @@ const IntelligenceCore = () => {
                     };
                     
                     setEventLog(prev => [newLog, ...prev].slice(0, 100)); // Max 100 entries
-                }
-                
-                // Log periodic updates (every 5 seconds)
-                if (data.objects?.length > 0 && Math.random() < 0.05) {
-                    console.log(`🎯 Tracking ${data.objects.length} objects | Threat: ${(data.threat_level * 100).toFixed(0)}%`);
                 }
             };
             
@@ -79,6 +99,178 @@ const IntelligenceCore = () => {
                 wsRef.current.close();
             }
         };
+    }, []);
+
+    // 🧠 REAL-TIME REASONING ENGINE: WebSocket connection to reasoning engine
+    useEffect(() => {
+        const connectReasoningWebSocket = () => {
+            // NEW: Real-time reasoning engine endpoint
+            const ws = new WebSocket('ws://localhost:8001/ws/reasoning');
+            
+            ws.onopen = () => {
+                console.log('🧠 Reasoning Engine connected - real-time analysis active');
+                setIsReasoningConnected(true);
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                // Handle initial connection message
+                if (data.status === 'connected') {
+                    console.log('✅ Reasoning engine ready:', data.message);
+                    return;
+                }
+                
+                // Process reasoning events
+                if (data.events && Array.isArray(data.events)) {
+                    const transformedEvents = data.events.map((event, index) => ({
+                        id: `reasoning_${event.track_id}_${event.timestamp}_${index}`,
+                        timestamp: new Date(event.timestamp * 1000).toLocaleTimeString(),
+                        type: event.class_name ? event.class_name.toUpperCase() : 'DETECTION',
+                        message: event.message,
+                        severity: event.severity === 'CRITICAL' ? 0.9 : event.severity === 'WARNING' ? 0.6 : 0.3,
+                        severityLevel: event.severity, // CRITICAL, WARNING, NORMAL
+                        color: event.color, // red, yellow, cyan
+                        trackId: event.track_id,
+                        metadata: event.metadata || {}
+                    }));
+                    
+                    // Update reasoning events state
+                    setReasoningEvents(prev => [...transformedEvents, ...prev].slice(0, 50));
+                    
+                    // Merge into event log (avoid duplicates)
+                    setEventLog(prev => {
+                        const existingIds = new Set(prev.map(e => e.id));
+                        const newEvents = transformedEvents.filter(e => !existingIds.has(e.id));
+                        
+                        if (newEvents.length > 0) {
+                            console.log(`🧠 ${newEvents.length} new reasoning event(s):`, 
+                                        newEvents.map(e => e.message).join('; '));
+                        }
+                        
+                        return [...newEvents, ...prev].slice(0, 100);
+                    });
+                    
+                    // Update last active time when new events arrive
+                    if (transformedEvents.length > 0) {
+                        setLastActiveTime(new Date());
+                        setIsLiveData(true);
+                    }
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ Reasoning WebSocket error:', error);
+                setIsReasoningConnected(false);
+            };
+            
+            ws.onclose = () => {
+                console.log('🔄 Reasoning WebSocket closed, reconnecting in 3s...');
+                setIsReasoningConnected(false);
+                setTimeout(connectReasoningWebSocket, 3000);
+            };
+            
+            reasoningWsRef.current = ws;
+        };
+        
+        connectReasoningWebSocket();
+        
+        return () => {
+            if (reasoningWsRef.current) {
+                reasoningWsRef.current.close();
+            }
+        };
+    }, []);
+
+    // Load persisted data from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedData = localStorage.getItem('intelligence_core_last_active');
+            const savedTime = localStorage.getItem('intelligence_core_last_active_time');
+            const savedEventLog = localStorage.getItem('intelligence_core_event_log');
+            
+            if (savedData) {
+                const parsed = JSON.parse(savedData);
+                setLastActiveData(parsed);
+                setReasoningData(parsed);
+                setIsLiveData(false);
+                console.log('📦 Restored historical data from localStorage');
+            }
+            
+            if (savedTime) {
+                setLastActiveTime(new Date(savedTime));
+            }
+            
+            if (savedEventLog) {
+                setEventLog(JSON.parse(savedEventLog));
+            }
+        } catch (error) {
+            console.error('Failed to load persisted data:', error);
+        }
+    }, []);
+
+    // Save active data to localStorage whenever it updates
+    useEffect(() => {
+        if (lastActiveData && lastActiveData.active_tracks > 0) {
+            try {
+                localStorage.setItem('intelligence_core_last_active', JSON.stringify(lastActiveData));
+                if (lastActiveTime) {
+                    localStorage.setItem('intelligence_core_last_active_time', lastActiveTime.toISOString());
+                }
+                localStorage.setItem('intelligence_core_event_log', JSON.stringify(eventLog.slice(0, 20))); // Save last 20 events
+            } catch (error) {
+                console.error('Failed to save data to localStorage:', error);
+            }
+        }
+    }, [lastActiveData, lastActiveTime, eventLog]);
+
+    // 🎯 REAL-TIME BEHAVIOR REASONING: Poll /api/intelligence/live every 500ms
+    useEffect(() => {
+        const fetchReasoningEvents = async () => {
+            try {
+                const response = await fetch('http://localhost:8001/api/intelligence/live?limit=50');
+                const data = await response.json();
+                
+                if (data.status === 'active' && data.events && data.events.length > 0) {
+                    // Transform backend events to eventLog format
+                    const transformedEvents = data.events.map((event, index) => ({
+                        id: `${event.track_id}_${event.event_type}_${event.timestamp}_${index}`,
+                        timestamp: new Date(event.timestamp).toLocaleTimeString(),
+                        type: event.event_type, // LOITERING, RUNNING, FIGHTING, INTRUSION
+                        message: event.reasoning,
+                        severity: Math.min(event.velocity / 200.0, 1.0), // Normalize velocity for progress bar
+                        severityLevel: event.severity, // NORMAL, WARNING, CRITICAL
+                        trackId: event.track_id,
+                        duration: event.duration,
+                        velocity: event.velocity
+                    }));
+                    
+                    setReasoningEvents(transformedEvents);
+                    
+                    // Merge with existing event log (avoid duplicates by ID)
+                    setEventLog(prev => {
+                        const existingIds = new Set(prev.map(e => e.id));
+                        const newEvents = transformedEvents.filter(e => !existingIds.has(e.id));
+                        
+                        if (newEvents.length > 0) {
+                            console.log(`🔔 ${newEvents.length} new live reasoning event(s)`);
+                        }
+                        
+                        return [...newEvents, ...prev].slice(0, 100); // Keep max 100
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch live reasoning:', error);
+            }
+        };
+        
+        // Initial fetch
+        fetchReasoningEvents();
+        
+        // Poll every 500ms for real-time updates
+        const pollInterval = setInterval(fetchReasoningEvents, 500);
+        
+        return () => clearInterval(pollInterval);
     }, []);
 
     // Auto-scroll event log
@@ -108,6 +300,25 @@ const IntelligenceCore = () => {
             case 'WARNING': return '#ff9100';
             case 'MONITORING': return '#00d9ff';
             default: return '#00ff88';
+        }
+    };
+
+    const getSeverityColor = (severity) => {
+        if (typeof severity === 'string') {
+            // Handle severity level strings (LOW, MEDIUM, HIGH, CRITICAL)
+            switch (severity.toUpperCase()) {
+                case 'CRITICAL': return '#ff0055';
+                case 'HIGH': return '#ff4400';
+                case 'MEDIUM': return '#ff9100';
+                case 'LOW': return '#00ff88';
+                default: return '#00d9ff';
+            }
+        } else {
+            // Handle severity scores (0.0-1.0)
+            if (severity >= 0.75) return '#ff0055'; // CRITICAL
+            if (severity >= 0.50) return '#ff4400'; // HIGH
+            if (severity >= 0.25) return '#ff9100'; // MEDIUM
+            return '#00ff88'; // LOW
         }
     };
 
@@ -185,9 +396,9 @@ const IntelligenceCore = () => {
                 </div>
                 
                 <div className="header-right">
-                    <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+                    <div className={`status-indicator ${isConnected && isReasoningConnected ? 'connected' : 'disconnected'}`}>
                         <div className="status-dot"></div>
-                        <span>{isConnected ? 'NEURAL LINK ACTIVE' : 'RECONNECTING...'}</span>
+                        <span>{isConnected && isReasoningConnected ? 'NEURAL LINK + REASONING ACTIVE' : 'RECONNECTING...'}</span>
                     </div>
                     {reasoningData && (
                         <div className="processing-stats">
@@ -214,21 +425,39 @@ const IntelligenceCore = () => {
                 <div className="summary-header">
                     <div className="summary-title">
                         <span className="summary-icon">⚡</span>
-                        <h3>LIVE AI REASONING SUMMARY</h3>
+                        <h3>{isLiveData ? 'LIVE AI REASONING SUMMARY' : 'AI REASONING SUMMARY (HISTORICAL)'}</h3>
                     </div>
                     <div className="summary-timestamp">
-                        <span className="timestamp-label">LAST UPDATE</span>
+                        <span className="timestamp-label">{isLiveData ? 'LAST UPDATE' : 'LAST ACTIVE'}</span>
                         <motion.span 
                             className="timestamp-value"
                             key={lastUpdateTime.getTime()}
                             initial={{ scale: 1.2, color: '#00d9ff' }}
-                            animate={{ scale: 1, color: '#ffffff' }}
+                            animate={{ scale: 1, color: isLiveData ? '#00ff88' : '#ff9100' }}
                             transition={{ duration: 0.3 }}
                         >
-                            {lastUpdateTime.toLocaleTimeString()}
+                            {(isLiveData ? lastUpdateTime : (lastActiveTime || lastUpdateTime)).toLocaleTimeString()}
                         </motion.span>
                     </div>
                 </div>
+
+                {/* Historical Data Indicator */}
+                {!isLiveData && lastActiveData && (
+                    <motion.div 
+                        className="historical-indicator"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.4 }}
+                    >
+                        <div className="historical-content">
+                            <span className="historical-icon">📊</span>
+                            <span className="historical-text">
+                                Displaying last recorded data - Camera not currently active
+                            </span>
+                            <span className="historical-badge">HISTORICAL</span>
+                        </div>
+                    </motion.div>
+                )}
 
                 <div className="summary-metrics">
                     {/* Active Tracks */}
@@ -540,24 +769,71 @@ const IntelligenceCore = () => {
                     
                     <div className="event-log" ref={logRef}>
                         {eventLog.length > 0 ? (
-                            eventLog.map((log) => (
-                                <div key={log.id} className={`log-entry ${log.type.toLowerCase()}`}>
-                                    <div className="log-time">{log.timestamp}</div>
-                                    <div className="log-message">{log.message}</div>
-                                    <div className="log-severity">
-                                        <div 
-                                            className="severity-indicator"
-                                            style={{ background: getStateColor(log.type) }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            ))
+                            <AnimatePresence>
+                                {eventLog.map((log) => (
+                                    <motion.div 
+                                        key={log.id} 
+                                        className={`log-entry ${(log.severityLevel || log.type).toLowerCase()}`}
+                                        initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                                        exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                                        transition={{ 
+                                            duration: 0.3,
+                                            ease: "easeOut"
+                                        }}
+                                    >
+                                        <div className="log-header">
+                                            <div className="log-time">{log.timestamp}</div>
+                                            {log.severityLevel && (
+                                                <motion.div 
+                                                    className={`severity-badge ${log.severityLevel.toLowerCase()}`}
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                                                >
+                                                    {log.severityLevel}
+                                                </motion.div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="log-type-row">
+                                            <span className="event-type-tag">{log.type}</span>
+                                            {log.trackId && (
+                                                <span className="track-id-tag">TRACK #{log.trackId}</span>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="log-message">{log.message}</div>
+                                        
+                                        {log.duration && (
+                                            <div className="log-footer">
+                                                <span className="duration-tag">🕐 {log.duration.toFixed(1)}s</span>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="log-severity">
+                                            <motion.div 
+                                                className="severity-indicator"
+                                                style={{ background: getSeverityColor(log.severityLevel || log.type) }}
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${(log.severity || 0) * 100}%` }}
+                                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                            ></motion.div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
                         ) : (
-                            <div className="empty-state">
+                            <motion.div 
+                                className="empty-state"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.5 }}
+                            >
                                 <div className="empty-icon">📜</div>
                                 <p>Event log empty</p>
                                 <span>Monitoring in progress...</span>
-                            </div>
+                            </motion.div>
                         )}
                     </div>
                 </div>
